@@ -1,0 +1,56 @@
+# Full application stack: Postgres, the FastAPI API, and the Streamlit UI.
+#
+# Notably absent: Celery/RabbitMQ/Redis. Background processing uses
+# FastAPI's built-in BackgroundTasks (see app/services/email_service.py),
+# which is sufficient at this scale — a task queue would be a genuine
+# future upgrade if the API process ever needed to survive restarts
+# mid-processing or scale workers independently, but isn't needed to
+# demonstrate this system's architecture. See README's "Why background
+# processing?" section.
+
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: email_router
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/email_router
+    ports:
+      - "8000:8000"
+    volumes:
+      - chroma_data:/app/chroma_db
+    depends_on:
+      db:
+        condition: service_healthy
+
+  streamlit:
+    build: .
+    restart: unless-stopped
+    command: ["streamlit", "run", "streamlit_app/app.py", "--server.address=0.0.0.0", "--server.port=8501"]
+    environment:
+      API_BASE_URL: http://api:8000
+    ports:
+      - "8501:8501"
+    depends_on:
+      - api
+
+volumes:
+  pgdata:
+  chroma_data:

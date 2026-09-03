@@ -1,0 +1,12 @@
+[
+  {"sender": "jane.doe@customer.com", "subject": "Can't access my account", "body": "Hi, I've tried resetting my password three times but the reset email never arrives. Can someone help?"},
+  {"sender": "mike@vendor.co", "subject": "Invoice #4521 still unpaid", "body": "We sent invoice #4521 over a month ago and haven't received payment. Please advise on status."},
+  {"sender": "sara.lee@company.com", "subject": "Health insurance enrollment", "body": "I just started last week and need to enroll in the health plan before the deadline. What's the process?"},
+  {"sender": "prospect@bigco.com", "subject": "Enterprise pricing question", "body": "We're evaluating your product for a 300-person rollout. Could someone send over enterprise pricing?"},
+  {"sender": "legal@partnerfirm.com", "subject": "DPA required before go-live", "body": "Our compliance team requires a signed Data Processing Agreement before we can proceed with integration."},
+  {"sender": "user123@gmail.com", "subject": "Bug: export button broken", "body": "The CSV export button on the reports page does nothing when clicked. Using Chrome on Mac."},
+  {"sender": "existing.customer@corp.com", "subject": "Double charged this month", "body": "I noticed two identical charges on my card for this month's subscription. Can you refund one?"},
+  {"sender": "candidate@email.com", "subject": "Following up on my application", "body": "I applied for the Backend Engineer role two weeks ago and wanted to check on the status."},
+  {"sender": "ops@client.com", "subject": "Production outage", "body": "Our integration with your API has been returning 503 errors for the last 15 minutes. This is affecting our customers."},
+  {"sender": "newuser@startup.io", "subject": "Trial question", "body": "Does the free trial include access to the analytics dashboard, or is that a paid-only feature?"}
+]

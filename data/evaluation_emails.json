@@ -1,0 +1,626 @@
+[
+  {
+    "id": 1,
+    "email": "Subject: Can't log in\n\nI can't log into my account, it says my password is incorrect even though I'm sure it's right.",
+    "expected_department": "IT",
+    "expected_team": "IT Support",
+    "expected_team_id": 101,
+    "difficulty": "straightforward"
+  },
+  {
+    "id": 2,
+    "email": "Subject: Password reset broken\n\nThe password reset link you emailed me doesn't work, it just shows a blank page.",
+    "expected_department": "IT",
+    "expected_team": "IT Support",
+    "expected_team_id": 101,
+    "difficulty": "straightforward"
+  },
+  {
+    "id": 3,
+    "email": "Subject: Need admin rights\n\nCould someone give me admin access on my laptop so I can install the design software?",
+    "expected_department": "IT",
+    "expected_team": "IT Support",
+    "expected_team_id": 101,
+    "difficulty": "straightforward"
+  },
+  {
+    "id": 4,
+    "email": "Subject: Laptop won't boot\n\nMy laptop won't turn on this morning, I've tried holding the power button but nothing happens.",
+    "expected_department": "IT",
+    "expected_team": "IT Support",
+    "expected_team_id": 101,
+    "difficulty": "straightforward"
+  },
+  {
+    "id": 5,
+    "email": "Subject: VPN keeps dropping\n\nMy VPN connection keeps dropping every few minutes when I work from home.",
+    "expected_department": "IT",
+    "expected_team": "IT Support",
+    "expected_team_id": 101,
+    "difficulty": "straightforward"
+  },
+  {
+    "id": 6,
+    "email": "Subject: Locked out\n\nI think my account got locked after too many failed attempts, how do I get back in?",
+    "expected_department": "IT",
+    "expected_team": "IT Support",
+    "expected_team_id": 101,
+    "difficulty": "reworded"
+  },
+  {
+    "id": 7,
+    "email": "Subject: Software install request\n\nIs there someone who can help me get Photoshop installed? I don't have permission on this machine.",
+    "expected_department": "IT",
+    "expected_team": "IT Support",
+    "expected_team_id": 101,
+    "difficulty": "reworded"
+  },
+  {
+    "id": 8,
+    "email": "Subject: Screen issue\n\nMy monitor stopped displaying anything after the latest Windows update, could be a driver issue?",
+    "expected_department": "IT",
+    "expected_team": "IT Support",
+    "expected_team_id": 101,
+    "difficulty": "reworded"
+  },
+  {
+    "id": 9,
+    "email": "Subject: MFA not working\n\nThe two-factor authentication code never arrives on my phone when I try to sign in.",
+    "expected_department": "IT",
+    "expected_team": "IT Support",
+    "expected_team_id": 101,
+    "difficulty": "reworded"
+  },
+  {
+    "id": 10,
+    "email": "Subject: New hire setup\n\nI'm starting Monday and need my laptop and email account set up before then.",
+    "expected_department": "IT",
+    "expected_team": "IT Support",
+    "expected_team_id": 101,
+    "difficulty": "reworded"
+  },
+  {
+    "id": 11,
+    "email": "Subject: Production down\n\nThe production website has been returning 500 errors for the last 20 minutes, this is urgent.",
+    "expected_department": "IT",
+    "expected_team": "Infrastructure & DevOps",
+    "expected_team_id": 102,
+    "difficulty": "straightforward"
+  },
+  {
+    "id": 12,
+    "email": "Subject: API errors\n\nOur API integration is getting intermittent 502 responses since this afternoon.",
+    "expected_department": "IT",
+    "expected_team": "Infrastructure & DevOps",
+    "expected_team_id": 102,
+    "difficulty": "straightforward"
+  },
+  {
+    "id": 13,
+    "email": "Subject: Staging environment\n\nCan we get a new staging environment provisioned for the upcoming release testing?",
+    "expected_department": "IT",
+    "expected_team": "Infrastructure & DevOps",
+    "expected_team_id": 102,
+    "difficulty": "straightforward"
+  },
+  {
+    "id": 14,
+    "email": "Subject: Deployment failing\n\nThe CI/CD pipeline is failing at the build step on the latest commit to main.",
+    "expected_department": "IT",
+    "expected_team": "Infrastructure & DevOps",
+    "expected_team_id": 102,
+    "difficulty": "straightforward"
+  },
+  {
+    "id": 15,
+    "email": "Subject: Server load\n\nOur monitoring dashboard shows CPU usage pinned at 100% on the main app server since noon.",
+    "expected_department": "IT",
+    "expected_team": "Infrastructure & DevOps",
+    "expected_team_id": 102,
+    "difficulty": "reworded"
+  },
+  {
+    "id": 16,
+    "email": "Subject: SSL certificate expiring\n\nHeads up, the SSL cert on api.ourapp.com expires in 3 days and needs renewing.",
+    "expected_department": "IT",
+    "expected_team": "Infrastructure & DevOps",
+    "expected_team_id": 102,
+    "difficulty": "reworded"
+  },
+  {
+    "id": 17,
+    "email": "Subject: Database migration\n\nWe need a database migration run against production during the next maintenance window.",
+    "expected_department": "IT",
+    "expected_team": "Infrastructure & DevOps",
+    "expected_team_id": 102,
+    "difficulty": "reworded"
+  },
+  {
+    "id": 18,
+    "email": "Subject: Can't connect to server\n\nI can't SSH into the build server, connection just times out \u2014 is it down?",
+    "expected_department": "IT",
+    "expected_team": "Infrastructure & DevOps",
+    "expected_team_id": 102,
+    "difficulty": "confusable"
+  },
+  {
+    "id": 19,
+    "email": "Subject: Double charged\n\nI was charged twice for my subscription this month, can I get one of those refunded?",
+    "expected_department": "Finance",
+    "expected_team": "Billing & Payments",
+    "expected_team_id": 201,
+    "difficulty": "straightforward"
+  },
+  {
+    "id": 20,
+    "email": "Subject: Missing transaction\n\nI am unable to access my online banking account and several transactions are missing.",
+    "expected_department": "Finance",
+    "expected_team": "Billing & Payments",
+    "expected_team_id": 201,
+    "difficulty": "straightforward"
+  },
+  {
+    "id": 21,
+    "email": "Subject: Need an invoice copy\n\nCould you send me a copy of last month's invoice? I need it for expense reporting.",
+    "expected_department": "Finance",
+    "expected_team": "Billing & Payments",
+    "expected_team_id": 201,
+    "difficulty": "straightforward"
+  },
+  {
+    "id": 22,
+    "email": "Subject: Card declined\n\nMy payment method was declined at checkout but I definitely have funds available.",
+    "expected_department": "Finance",
+    "expected_team": "Billing & Payments",
+    "expected_team_id": 201,
+    "difficulty": "straightforward"
+  },
+  {
+    "id": 23,
+    "email": "Subject: Refund request\n\nI'd like to request a refund, I accidentally purchased the annual plan instead of monthly.",
+    "expected_department": "Finance",
+    "expected_team": "Billing & Payments",
+    "expected_team_id": 201,
+    "difficulty": "straightforward"
+  },
+  {
+    "id": 24,
+    "email": "Subject: Wrong amount charged\n\nThe amount on my statement doesn't match what I was quoted at signup, can someone check?",
+    "expected_department": "Finance",
+    "expected_team": "Billing & Payments",
+    "expected_team_id": 201,
+    "difficulty": "reworded"
+  },
+  {
+    "id": 25,
+    "email": "Subject: Update card on file\n\nHow do I update the credit card on file for my subscription?",
+    "expected_department": "Finance",
+    "expected_team": "Billing & Payments",
+    "expected_team_id": 201,
+    "difficulty": "reworded"
+  },
+  {
+    "id": 26,
+    "email": "Subject: Subscription still active after cancel\n\nI cancelled last week but was still billed today, please look into this.",
+    "expected_department": "Finance",
+    "expected_team": "Billing & Payments",
+    "expected_team_id": 201,
+    "difficulty": "reworded"
+  },
+  {
+    "id": 27,
+    "email": "Subject: Vendor invoice unpaid\n\nOur invoice to your company from last month hasn't been paid yet, can you check on it?",
+    "expected_department": "Finance",
+    "expected_team": "Accounts Payable",
+    "expected_team_id": 202,
+    "difficulty": "straightforward"
+  },
+  {
+    "id": 28,
+    "email": "Subject: Update banking details\n\nWe need to update our vendor banking details for future payments.",
+    "expected_department": "Finance",
+    "expected_team": "Accounts Payable",
+    "expected_team_id": 202,
+    "difficulty": "straightforward"
+  },
+  {
+    "id": 29,
+    "email": "Subject: PO status\n\nWhen will purchase order #7788 be processed? We're waiting to ship the order.",
+    "expected_department": "Finance",
+    "expected_team": "Accounts Payable",
+    "expected_team_id": 202,
+    "difficulty": "straightforward"
+  },
+  {
+    "id": 30,
+    "email": "Subject: Contractor payment\n\nAs a contractor, I haven't received payment for last month's invoice yet.",
+    "expected_department": "Finance",
+    "expected_team": "Accounts Payable",
+    "expected_team_id": 202,
+    "difficulty": "reworded"
+  },
+  {
+    "id": 31,
+    "email": "Subject: Payment not received\n\nWe are a supplier and have not received payment for our March invoice.",
+    "expected_department": "Finance",
+    "expected_team": "Accounts Payable",
+    "expected_team_id": 202,
+    "difficulty": "confusable"
+  },
+  {
+    "id": 32,
+    "email": "Subject: Missing paycheck\n\nI haven't received my paycheck this month, could someone look into this?",
+    "expected_department": "HR",
+    "expected_team": "HR Operations",
+    "expected_team_id": 301,
+    "difficulty": "straightforward"
+  },
+  {
+    "id": 33,
+    "email": "Subject: Benefits enrollment\n\nHow do I enroll in the company health plan? I just started last week.",
+    "expected_department": "HR",
+    "expected_team": "HR Operations",
+    "expected_team_id": 301,
+    "difficulty": "straightforward"
+  },
+  {
+    "id": 34,
+    "email": "Subject: Parental leave request\n\nI'd like to formally request parental leave starting next month.",
+    "expected_department": "HR",
+    "expected_team": "HR Operations",
+    "expected_team_id": 301,
+    "difficulty": "straightforward"
+  },
+  {
+    "id": 35,
+    "email": "Subject: Employment verification\n\nI need an employment verification letter for a mortgage application.",
+    "expected_department": "HR",
+    "expected_team": "HR Operations",
+    "expected_team_id": 301,
+    "difficulty": "straightforward"
+  },
+  {
+    "id": 36,
+    "email": "Subject: PTO balance\n\nCan someone tell me how many vacation days I have left this year?",
+    "expected_department": "HR",
+    "expected_team": "HR Operations",
+    "expected_team_id": 301,
+    "difficulty": "reworded"
+  },
+  {
+    "id": 37,
+    "email": "Subject: Address change\n\nI moved recently and need to update my home address in the payroll system.",
+    "expected_department": "HR",
+    "expected_team": "HR Operations",
+    "expected_team_id": 301,
+    "difficulty": "reworded"
+  },
+  {
+    "id": 38,
+    "email": "Subject: 401k question\n\nHow do I change my 401k contribution percentage?",
+    "expected_department": "HR",
+    "expected_team": "HR Operations",
+    "expected_team_id": 301,
+    "difficulty": "reworded"
+  },
+  {
+    "id": 39,
+    "email": "Subject: Application status\n\nI applied for a position two weeks ago and haven't heard back, any update?",
+    "expected_department": "HR",
+    "expected_team": "Recruiting",
+    "expected_team_id": 302,
+    "difficulty": "straightforward"
+  },
+  {
+    "id": 40,
+    "email": "Subject: Reschedule interview\n\nCould we reschedule my interview to next week? Something came up.",
+    "expected_department": "HR",
+    "expected_team": "Recruiting",
+    "expected_team_id": 302,
+    "difficulty": "straightforward"
+  },
+  {
+    "id": 41,
+    "email": "Subject: Is role still open\n\nIs the Senior Engineer role still open? I'd like to apply.",
+    "expected_department": "HR",
+    "expected_team": "Recruiting",
+    "expected_team_id": 302,
+    "difficulty": "straightforward"
+  },
+  {
+    "id": 42,
+    "email": "Subject: Referral question\n\nI want to refer a friend for an open position, what's the process?",
+    "expected_department": "HR",
+    "expected_team": "Recruiting",
+    "expected_team_id": 302,
+    "difficulty": "reworded"
+  },
+  {
+    "id": 43,
+    "email": "Subject: Offer letter question\n\nI received an offer letter but have a question about the start date listed.",
+    "expected_department": "HR",
+    "expected_team": "Recruiting",
+    "expected_team_id": 302,
+    "difficulty": "confusable"
+  },
+  {
+    "id": 44,
+    "email": "Subject: Upgrade to enterprise\n\nWe'd like to upgrade our existing account to the enterprise plan.",
+    "expected_department": "Sales",
+    "expected_team": "Account Management",
+    "expected_team_id": 401,
+    "difficulty": "straightforward"
+  },
+  {
+    "id": 45,
+    "email": "Subject: Renewal questions\n\nOur contract renewal date is coming up and we have a few questions before signing.",
+    "expected_department": "Sales",
+    "expected_team": "Account Management",
+    "expected_team_id": 401,
+    "difficulty": "straightforward"
+  },
+  {
+    "id": 46,
+    "email": "Subject: Custom pricing\n\nCan we get a custom pricing quote for 500 seats under our existing contract?",
+    "expected_department": "Sales",
+    "expected_team": "Account Management",
+    "expected_team_id": 401,
+    "difficulty": "straightforward"
+  },
+  {
+    "id": 47,
+    "email": "Subject: Downgrade plan\n\nWe'd like to downgrade our current plan starting next billing cycle.",
+    "expected_department": "Sales",
+    "expected_team": "Account Management",
+    "expected_team_id": 401,
+    "difficulty": "reworded"
+  },
+  {
+    "id": 48,
+    "email": "Subject: Add seats\n\nWe need to add 20 more seats to our current enterprise agreement.",
+    "expected_department": "Sales",
+    "expected_team": "Account Management",
+    "expected_team_id": 401,
+    "difficulty": "reworded"
+  },
+  {
+    "id": 49,
+    "email": "Subject: Interested in your product\n\nI'm interested in your product for my company, could someone reach out?",
+    "expected_department": "Sales",
+    "expected_team": "New Business",
+    "expected_team_id": 402,
+    "difficulty": "straightforward"
+  },
+  {
+    "id": 50,
+    "email": "Subject: Free trial question\n\nDo you offer a free trial before committing to a paid plan?",
+    "expected_department": "Sales",
+    "expected_team": "New Business",
+    "expected_team_id": 402,
+    "difficulty": "straightforward"
+  },
+  {
+    "id": 51,
+    "email": "Subject: Plan differences\n\nWhat's the difference between your Basic and Pro plans?",
+    "expected_department": "Sales",
+    "expected_team": "New Business",
+    "expected_team_id": 402,
+    "difficulty": "straightforward"
+  },
+  {
+    "id": 52,
+    "email": "Subject: Demo request\n\nCould we schedule a product demo for our team sometime this week?",
+    "expected_department": "Sales",
+    "expected_team": "New Business",
+    "expected_team_id": 402,
+    "difficulty": "reworded"
+  },
+  {
+    "id": 53,
+    "email": "Subject: Considering switching providers\n\nWe currently use a competitor's product but are considering switching, what's the pricing?",
+    "expected_department": "Sales",
+    "expected_team": "New Business",
+    "expected_team_id": 402,
+    "difficulty": "confusable"
+  },
+  {
+    "id": 54,
+    "email": "Subject: DPA required\n\nWe need a signed Data Processing Agreement before proceeding with integration.",
+    "expected_department": "Legal",
+    "expected_team": "Contracts & Compliance",
+    "expected_team_id": 501,
+    "difficulty": "straightforward"
+  },
+  {
+    "id": 55,
+    "email": "Subject: Contract review\n\nCan your legal team review this MSA redline we sent over last week?",
+    "expected_department": "Legal",
+    "expected_team": "Contracts & Compliance",
+    "expected_team_id": 501,
+    "difficulty": "straightforward"
+  },
+  {
+    "id": 56,
+    "email": "Subject: GDPR compliance\n\nAre you GDPR compliant? We need documentation for our records.",
+    "expected_department": "Legal",
+    "expected_team": "Contracts & Compliance",
+    "expected_team_id": 501,
+    "difficulty": "straightforward"
+  },
+  {
+    "id": 57,
+    "email": "Subject: NDA request\n\nBefore we share our roadmap, we'll need a mutual NDA signed.",
+    "expected_department": "Legal",
+    "expected_team": "Contracts & Compliance",
+    "expected_team_id": 501,
+    "difficulty": "reworded"
+  },
+  {
+    "id": 58,
+    "email": "Subject: SOC 2 report\n\nCould you share your latest SOC 2 Type II report for our vendor security review?",
+    "expected_department": "Legal",
+    "expected_team": "Contracts & Compliance",
+    "expected_team_id": 501,
+    "difficulty": "reworded"
+  },
+  {
+    "id": 59,
+    "email": "Subject: Export to CSV\n\nHow do I export my data to CSV? I can't find the option anywhere.",
+    "expected_department": "Customer Support",
+    "expected_team": "Product Support",
+    "expected_team_id": 601,
+    "difficulty": "straightforward"
+  },
+  {
+    "id": 60,
+    "email": "Subject: Bug report\n\nI found a bug where the save button doesn't work on mobile Safari.",
+    "expected_department": "Customer Support",
+    "expected_team": "Product Support",
+    "expected_team_id": 601,
+    "difficulty": "straightforward"
+  },
+  {
+    "id": 61,
+    "email": "Subject: Bulk delete\n\nIs there a way to bulk-delete old records instead of one at a time?",
+    "expected_department": "Customer Support",
+    "expected_team": "Product Support",
+    "expected_team_id": 601,
+    "difficulty": "straightforward"
+  },
+  {
+    "id": 62,
+    "email": "Subject: Feature request\n\nCould you add a dark mode option? Would really help with eye strain.",
+    "expected_department": "Customer Support",
+    "expected_team": "Product Support",
+    "expected_team_id": 601,
+    "difficulty": "straightforward"
+  },
+  {
+    "id": 63,
+    "email": "Subject: How to use a feature\n\nI can't figure out how to set up recurring reports, is there a guide?",
+    "expected_department": "Customer Support",
+    "expected_team": "Product Support",
+    "expected_team_id": 601,
+    "difficulty": "reworded"
+  },
+  {
+    "id": 64,
+    "email": "Subject: App crashing\n\nThe mobile app crashes every time I try to open the settings page.",
+    "expected_department": "Customer Support",
+    "expected_team": "Product Support",
+    "expected_team_id": 601,
+    "difficulty": "reworded"
+  },
+  {
+    "id": 65,
+    "email": "Subject: Where is my data\n\nI imported a CSV yesterday but don't see the records anywhere in the dashboard.",
+    "expected_department": "Customer Support",
+    "expected_team": "Product Support",
+    "expected_team_id": 601,
+    "difficulty": "reworded"
+  },
+  {
+    "id": 66,
+    "email": "Subject: Account problem\n\nThere's something wrong with my account, I think it might be a billing issue but I'm not totally sure.",
+    "expected_department": "Finance",
+    "expected_team": "Billing & Payments",
+    "expected_team_id": 201,
+    "difficulty": "ambiguous"
+  },
+  {
+    "id": 67,
+    "email": "Subject: Can't access anything\n\nI can't access anything today \u2014 not sure if it's my login or something on your end.",
+    "expected_department": "IT",
+    "expected_team": "IT Support",
+    "expected_team_id": 101,
+    "difficulty": "ambiguous"
+  },
+  {
+    "id": 68,
+    "email": "Subject: Question about our plan\n\nWe have some questions about our current plan and what our options are going forward.",
+    "expected_department": "Sales",
+    "expected_team": "Account Management",
+    "expected_team_id": 401,
+    "difficulty": "ambiguous"
+  },
+  {
+    "id": 69,
+    "email": "Subject: Something's not working\n\nSomething isn't working right in the app today, not sure exactly what's wrong.",
+    "expected_department": "Customer Support",
+    "expected_team": "Product Support",
+    "expected_team_id": 601,
+    "difficulty": "ambiguous"
+  },
+  {
+    "id": 70,
+    "email": "Subject: Payroll and benefits question\n\nI have a question that touches both payroll and my benefits enrollment, who should I talk to?",
+    "expected_department": "HR",
+    "expected_team": "HR Operations",
+    "expected_team_id": 301,
+    "difficulty": "ambiguous"
+  },
+  {
+    "id": 71,
+    "email": "Subject: Login issue and also a billing question\n\nI can't log into my account, and separately I also noticed I was charged twice this month.",
+    "expected_department": "IT",
+    "expected_team": "IT Support",
+    "expected_team_id": 101,
+    "difficulty": "multi_issue"
+  },
+  {
+    "id": 72,
+    "email": "Subject: Refund and also a bug\n\nI'd like a refund for this charge, and by the way the export button is also broken.",
+    "expected_department": "Finance",
+    "expected_team": "Billing & Payments",
+    "expected_team_id": 201,
+    "difficulty": "multi_issue"
+  },
+  {
+    "id": 73,
+    "email": "Subject: Upgrade and contract question\n\nWe want to upgrade our plan, and also had a question about the contract renewal terms.",
+    "expected_department": "Sales",
+    "expected_team": "Account Management",
+    "expected_team_id": 401,
+    "difficulty": "multi_issue"
+  },
+  {
+    "id": 74,
+    "email": "Subject: Interview reschedule and offer question\n\nCould we reschedule my interview, and I also had a question about the offer letter timeline.",
+    "expected_department": "HR",
+    "expected_team": "Recruiting",
+    "expected_team_id": 302,
+    "difficulty": "multi_issue"
+  },
+  {
+    "id": 75,
+    "email": "Subject: Whole platform is slow\n\nThe entire platform has been extremely slow for all users since this morning, seems like a systemic issue.",
+    "expected_department": "IT",
+    "expected_team": "Infrastructure & DevOps",
+    "expected_team_id": 102,
+    "difficulty": "confusable"
+  },
+  {
+    "id": 76,
+    "email": "Subject: My account specifically is slow\n\nThe app is fine for my coworkers but very slow specifically on my laptop only.",
+    "expected_department": "IT",
+    "expected_team": "IT Support",
+    "expected_team_id": 101,
+    "difficulty": "confusable"
+  },
+  {
+    "id": 77,
+    "email": "Subject: We haven't been paid\n\nAs your vendor, we have not received payment for services rendered last quarter.",
+    "expected_department": "Finance",
+    "expected_team": "Accounts Payable",
+    "expected_team_id": 202,
+    "difficulty": "confusable"
+  },
+  {
+    "id": 78,
+    "email": "Subject: I haven't been charged\n\nI expected to be charged for this month's subscription but wasn't, is something wrong?",
+    "expected_department": "Finance",
+    "expected_team": "Billing & Payments",
+    "expected_team_id": 201,
+    "difficulty": "confusable"
+  }
+]

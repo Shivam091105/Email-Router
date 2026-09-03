@@ -1,0 +1,139 @@
+[
+  {
+    "department": "IT",
+    "teams": [
+      {
+        "team_id": 101,
+        "name": "IT Support",
+        "description": "Handles user-facing technical issues: login problems, account access, password resets, software installation, hardware requests, and general troubleshooting for internal tools.",
+        "examples": [
+          "I can't log into my account",
+          "My password reset link isn't working",
+          "I need admin access to install software on my laptop",
+          "My laptop won't turn on",
+          "The VPN keeps disconnecting when I work from home"
+        ]
+      },
+      {
+        "team_id": 102,
+        "name": "Infrastructure & DevOps",
+        "description": "Manages servers, cloud infrastructure, deployments, uptime, and outages of internal and customer-facing systems.",
+        "examples": [
+          "The production website has been down for 20 minutes",
+          "Our API is returning 500 errors intermittently",
+          "We need a new staging environment provisioned",
+          "The deployment pipeline is failing on the latest release"
+        ]
+      }
+    ]
+  },
+  {
+    "department": "Finance",
+    "teams": [
+      {
+        "team_id": 201,
+        "name": "Billing & Payments",
+        "description": "Handles customer billing questions, failed transactions, refunds, invoice discrepancies, and payment method issues.",
+        "examples": [
+          "I was charged twice for my subscription this month",
+          "My online banking shows a missing transaction",
+          "I need a copy of last month's invoice",
+          "My payment method was declined but I have funds available",
+          "I'd like to request a refund for an accidental purchase"
+        ]
+      },
+      {
+        "team_id": 202,
+        "name": "Accounts Payable",
+        "description": "Manages payments the company owes to vendors and contractors, including purchase orders and vendor invoice processing.",
+        "examples": [
+          "Our invoice to your company hasn't been paid yet",
+          "We need to update our vendor banking details",
+          "When will this purchase order be processed?"
+        ]
+      }
+    ]
+  },
+  {
+    "department": "HR",
+    "teams": [
+      {
+        "team_id": 301,
+        "name": "HR Operations",
+        "description": "Handles employee records, onboarding, offboarding, leave requests, payroll questions, and benefits enrollment.",
+        "examples": [
+          "I haven't received my paycheck this month",
+          "How do I enroll in the company health plan?",
+          "I'd like to request parental leave",
+          "My employment verification letter is needed for a loan application"
+        ]
+      },
+      {
+        "team_id": 302,
+        "name": "Recruiting",
+        "description": "Manages job postings, candidate applications, interview scheduling, and hiring status inquiries.",
+        "examples": [
+          "I applied for a position two weeks ago and haven't heard back",
+          "Can you reschedule my interview to next week?",
+          "Is the Senior Engineer role still open?"
+        ]
+      }
+    ]
+  },
+  {
+    "department": "Sales",
+    "teams": [
+      {
+        "team_id": 401,
+        "name": "Account Management",
+        "description": "Handles existing customer relationships, contract renewals, upgrades/downgrades, and enterprise pricing questions.",
+        "examples": [
+          "We'd like to upgrade to the enterprise plan",
+          "Our contract renewal date is coming up and we have questions",
+          "Can we get a custom pricing quote for 500 seats?"
+        ]
+      },
+      {
+        "team_id": 402,
+        "name": "New Business",
+        "description": "Handles inbound inquiries from prospective new customers who have not yet purchased.",
+        "examples": [
+          "I'm interested in your product for my company, can someone reach out?",
+          "Do you offer a free trial?",
+          "What's the difference between your Basic and Pro plans?"
+        ]
+      }
+    ]
+  },
+  {
+    "department": "Legal",
+    "teams": [
+      {
+        "team_id": 501,
+        "name": "Contracts & Compliance",
+        "description": "Handles contract review, data processing agreements, compliance questions, and regulatory inquiries.",
+        "examples": [
+          "We need a signed Data Processing Agreement before proceeding",
+          "Can your legal team review this MSA redline?",
+          "Are you GDPR compliant?"
+        ]
+      }
+    ]
+  },
+  {
+    "department": "Customer Support",
+    "teams": [
+      {
+        "team_id": 601,
+        "name": "Product Support",
+        "description": "Handles product usage questions, bug reports, feature requests, and general how-to questions from end users.",
+        "examples": [
+          "How do I export my data to CSV?",
+          "I found a bug where the save button doesn't work on mobile",
+          "Is there a way to bulk-delete old records?",
+          "Can you add a dark mode feature?"
+        ]
+      }
+    ]
+  }
+]
