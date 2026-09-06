@@ -25,10 +25,11 @@ dataset — not a production system. See [Limitations](#limitations).
 10. [Evaluation methodology & results](#evaluation-methodology--results)
 11. [Limitations](#limitations)
 12. [Setup instructions](#setup-instructions)
-13. [Environment variables](#environment-variables)
-14. [Docker](#docker)
-15. [Testing](#testing)
-16. [Future improvements](#future-improvements)
+13. [Running with a real Gmail inbox](#running-with-a-real-gmail-inbox)
+14. [Environment variables](#environment-variables)
+15. [Docker](#docker)
+16. [Testing](#testing)
+17. [Future improvements](#future-improvements)
 
 ---
 
@@ -245,6 +246,7 @@ use case for a relational DB, not a default choice made without thought.
 | Method | Path | Description |
 |---|---|---|
 | POST | `/emails` | Submit an email; returns immediately (status `PENDING`), processing runs in the background |
+| POST | `/emails/fetch` | Manually trigger an IMAP fetch of unseen emails from a real mailbox (see "Running with a real Gmail inbox" below); processes each one synchronously through the same pipeline |
 | GET | `/emails` | List emails (paginated) |
 | GET | `/emails/{id}` | Email detail, including routing result if available |
 | GET | `/emails/{id}/classification` | Classification details (409 if not yet classified) |
@@ -480,6 +482,139 @@ Visit http://localhost:8501.
   `curl -X POST localhost:8000/emails -d '{"sender":"a@b.com","subject":"help","body":"I cannot log in"}' -H "Content-Type: application/json"`.
 - **Mode 2 (sample data)**: click "Load 3 sample emails" in Streamlit, which reads `data/sample_emails.json`.
 - **Mode 3 (real IMAP)**: set `IMAP_HOST`/`IMAP_USER`/`IMAP_PASSWORD` in `.env`, then call `app.integrations.imap_client.fetch_unseen_emails()`.
+
+---
+
+## Running with a real Gmail inbox
+
+Everything above ("Setup instructions") describes **synthetic/API
+testing**: emails you submit yourself via `POST /emails`, Streamlit's
+"Load sample emails" button, or `scripts/bulk_submit.py`. This section
+covers **real Gmail integration** — an actual mailbox, real incoming
+mail, fetched via IMAP and forwarded via SMTP.
+
+Both paths converge on the exact same pipeline: `POST /emails` and
+`POST /emails/fetch` both end up calling `process_email()` — nothing
+about classification, RAG, or the LangGraph workflow differs between a
+synthetic test email and a real one from Gmail.
+
+```
+Synthetic/API testing                    Real Gmail integration
+──────────────────────                   ──────────────────────
+POST /emails  ──┐                        Gmail inbox ──IMAP──┐
+                ├──▶ process_email() ◀───────────────────────┘
+Streamlit UI  ──┘         │
+                          ▼
+              LangGraph (RAG + LLM classification)
+                          │
+                          ▼
+                    PostgreSQL
+                          │
+                          ▼ (if ROUTED)
+                    SMTP forward to destination team
+```
+
+### 1. Create a Gmail App Password
+
+Gmail will reject IMAP/SMTP login with your normal password if 2-Step
+Verification is enabled (which Google requires for most accounts). Use
+an **App Password** instead:
+
+1. Enable 2-Step Verification: https://myaccount.google.com/security
+2. Create an App Password: https://myaccount.google.com/apppasswords
+3. Use that 16-character password as `IMAP_PASSWORD`/`SMTP_PASSWORD` below — not your real Gmail password.
+
+### 2. Add IMAP/SMTP variables to `.env`
+
+```env
+IMAP_HOST=imap.gmail.com
+IMAP_PORT=993
+IMAP_USER=your-address@gmail.com
+IMAP_PASSWORD=your-16-char-app-password
+
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=your-address@gmail.com
+SMTP_PASSWORD=your-16-char-app-password
+```
+
+(These use the same Gmail address/App Password for both — Gmail's IMAP
+and SMTP servers share credentials.)
+
+### 3. Start the application as usual
+
+```bash
+uvicorn app.main:app --reload
+```
+
+No separate process, worker, or service is needed for IMAP — it's just
+another endpoint on the same FastAPI app.
+
+### 4. Send a test email to your configured Gmail inbox
+
+From any other email account, send something like:
+
+> Subject: Can't access my account
+> Body: I've been trying to log in for the last hour with no luck.
+
+### 5. Trigger the fetch
+
+```bash
+curl -X POST http://localhost:8000/emails/fetch
+```
+
+or from Streamlit/`/docs`, call `POST /emails/fetch`.
+
+This is a **manual, one-shot fetch** — not continuous polling. Call it
+again whenever you want to check for new mail. (Adding a scheduler would
+be a reasonable future addition, but isn't needed to demonstrate the
+integration and was deliberately left out — see "What this doesn't do"
+below.)
+
+### 6. What happens
+
+1. The app connects to `imap.gmail.com`, searches for `UNSEEN` messages.
+2. Each one is fetched via `BODY.PEEK[]` — this does **not** mark it
+   `\Seen` by itself, unlike a plain fetch.
+3. It's parsed with the same `parse_raw_email()` used everywhere else
+   (`app/integrations/email_parser.py`) — sender, subject, body,
+   attachments.
+4. It's handed to `process_parsed_email_sync()`, which creates an `Email`
+   row and calls the same `process_email()` that `POST /emails` uses:
+   RAG retrieval → LLM classification → confidence check → save.
+5. If that completes without a fatal error, the message is marked
+   `\Seen`, so it won't be re-fetched next time. (If classification
+   itself fails, e.g. bad LLM output, the email is still marked `\Seen`
+   — a `FAILED` status is a legitimate recorded outcome, not something
+   retrying the *same* IMAP fetch would fix. Only a genuine failure to
+   even save the email, like the database being down, leaves it unseen
+   for retry.)
+6. If the result is `ROUTED` (high confidence), `save_result` calls
+   `notify_destination_team()`, which sends an email via SMTP to
+   `team-{id}@example.com` containing the original sender, subject,
+   body, predicted team, and generated summary. (That address template
+   is a placeholder — see `app/services/routing_service.py` — replace it
+   with real team addresses for actual use.)
+7. If the result is `REVIEW_REQUIRED` (low confidence), it is **not**
+   forwarded via SMTP yet — it waits in `GET /reviews/pending` for a
+   human decision via `POST /reviews/{id}`, same as any API-submitted
+   email.
+8. Check the result the same way you would for any email:
+   `GET /emails`, `GET /emails/{id}`, or the Streamlit UI.
+
+### What this doesn't do (by design)
+
+- **No continuous polling.** `POST /emails/fetch` is triggered manually.
+  A scheduler (cron, APScheduler, etc.) calling this endpoint
+  periodically would be a small, separate addition — not built here to
+  keep the surface area minimal, per this feature's own scope.
+- **No new classification logic.** `app/graph`, `app/rag`, and
+  `app/services/classification_service.py` are completely untouched by
+  this change. IMAP-sourced and API-sourced emails are indistinguishable
+  once they're an `Email` row in the database.
+- **No message queue, worker process, or scheduler infrastructure** —
+  `POST /emails/fetch` runs the fetch loop synchronously, in-request,
+  using the existing FastAPI process.
 
 ---
 
