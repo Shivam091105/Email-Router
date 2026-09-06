@@ -12,6 +12,7 @@ save_result with status FAILED.
 """
 
 import json
+from unittest.mock import patch
 
 import pytest
 from langchain_core.documents import Document
@@ -78,6 +79,46 @@ def test_high_confidence_routes_automatically(session_factory, vectorstore):
     assert repositories.get_routing_result(db, email_id).team_id == 101
     assert repositories.get_review(db, email_id) is None  # no review row for auto-routed emails
     db.close()
+
+
+def test_routed_email_triggers_smtp_notification(session_factory, vectorstore):
+    """
+    Regression test for the IMAP/SMTP integration: once an email is
+    auto-routed, notify_destination_team() must actually be called (it
+    previously existed but was dead code, never wired into the graph).
+    We patch send_routing_notification itself rather than requiring a
+    real SMTP server.
+    """
+    email_id = _make_email(session_factory, sender="cust@gmail.com", subject="help", body="I can't log into my account")
+    valid_json = json.dumps(
+        {"department": "IT", "team": "IT Support", "team_id": 101, "confidence": 0.95, "reasoning": "Login issue."}
+    )
+    llm = FakeLLMClient(responses=[valid_json, "Cannot log in."])
+
+    with patch("app.services.routing_service.send_routing_notification") as mock_send:
+        run_email_workflow(
+            llm, vectorstore, session_factory, email_id, "cust@gmail.com", "help", "I can't log into my account"
+        )
+
+    mock_send.assert_called_once()
+    call_kwargs = mock_send.call_args.kwargs
+    assert call_kwargs["original_sender"] == "cust@gmail.com"
+    assert call_kwargs["team_name"] == "IT Support"
+
+
+def test_review_required_email_does_not_trigger_smtp_notification(session_factory, vectorstore):
+    """Low-confidence emails must NOT be forwarded until a human confirms
+    the team via POST /reviews/{id} — see save_result's comment."""
+    email_id = _make_email(session_factory, body="something ambiguous")
+    low_conf_json = json.dumps(
+        {"department": "IT", "team": "IT Support", "team_id": 101, "confidence": 0.3, "reasoning": "Weak match."}
+    )
+    llm = FakeLLMClient(responses=[low_conf_json, "Ambiguous request."])
+
+    with patch("app.services.routing_service.send_routing_notification") as mock_send:
+        run_email_workflow(llm, vectorstore, session_factory, email_id, "a@b.com", "subj", "something ambiguous")
+
+    mock_send.assert_not_called()
 
 
 def test_low_confidence_goes_to_human_review(session_factory, vectorstore):

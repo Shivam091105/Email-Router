@@ -25,6 +25,7 @@ from app.llm.client import LLMClient
 from app.rag.retriever import format_context, retrieve_teams
 from app.schemas.classification import ClassificationError
 from app.services.classification_service import classify_email as run_classification
+from app.services.routing_service import notify_destination_team
 from app.services.summary_service import generate_summary as run_summary_generation
 
 logger = logging.getLogger(__name__)
@@ -107,10 +108,11 @@ def make_route_email():
             "Auto-routing email %s to team_id=%s (%s), confidence=%.2f",
             state.get("email_id"), state.get("team_id"), state.get("team"), state.get("confidence", 0.0),
         )
-        # A real SMTP notification to the destination team would happen here
-        # (see app/integrations/smtp_client.py) — omitted from the graph
-        # itself so the workflow's core logic can be tested without a mail
-        # server, per app/integrations/smtp_client.py's own docstring.
+        # The actual SMTP notification to the destination team happens in
+        # save_result (once summary/routing_result are both final), via
+        # app/services/routing_service.notify_destination_team — not here,
+        # so this node's own logic stays trivially testable without a
+        # mail server.
         return {"status": "ROUTED"}
 
     return route_email
@@ -152,13 +154,13 @@ def make_save_result(session_factory):
             email_id = state["email_id"]
             status = state.get("status", "FAILED")
 
-            repositories.update_email_status(db, email_id, status)
+            email = repositories.update_email_status(db, email_id, status)
 
             if status == "FAILED":
                 logger.error("Saving FAILED result for email %s: %s", email_id, state.get("error"))
                 return {}
 
-            repositories.create_routing_result(
+            routing_result = repositories.create_routing_result(
                 db,
                 email_id=email_id,
                 department=state.get("department", ""),
@@ -178,6 +180,17 @@ def make_save_result(session_factory):
                     predicted_team_id=state.get("team_id", 0),
                     predicted_confidence=state.get("confidence", 0.0),
                 )
+            elif status == "ROUTED":
+                # Forward the routed email to the destination team via SMTP.
+                # notify_destination_team() (app/services/routing_service.py)
+                # already existed but was previously unused — this is the
+                # one place it gets called, once classification + summary
+                # are both final. REVIEW_REQUIRED emails are NOT forwarded
+                # here since a human hasn't confirmed the destination team
+                # yet; that happens once a decision is submitted via
+                # POST /reviews/{id} (not wired to SMTP — out of scope for
+                # this change, noted in the README).
+                notify_destination_team(email, routing_result)
 
             return {}
         finally:

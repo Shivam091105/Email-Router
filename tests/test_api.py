@@ -9,10 +9,12 @@ response cycle with zero network calls.
 """
 
 import json
+from unittest.mock import patch
 
 from langchain_core.documents import Document
 
 from app.core.dependencies import get_llm_client, get_vectorstore
+from app.integrations.imap_client import IMAPConnectionError
 from app.llm.client import FakeLLMClient
 from app.main import app
 from app.rag.embeddings import DeterministicFakeEmbeddings
@@ -142,6 +144,40 @@ def test_submit_email_validates_empty_body(client, tmp_path):
 
     response = client.post("/emails", json={"sender": "a@b.com", "subject": "x", "body": ""})
     assert response.status_code == 422  # Pydantic min_length validation
+
+
+def test_fetch_endpoint_calls_imap_and_returns_summary(client, tmp_path):
+    """
+    POST /emails/fetch should delegate to fetch_and_process_unseen_emails
+    and return its summary. We patch that function directly (already
+    covered by its own unit tests in test_imap_integration.py) so this
+    test is purely about the endpoint's wiring: DI, response shape, and
+    error translation.
+    """
+    embedding = DeterministicFakeEmbeddings()
+    vs = build_vectorstore(SAMPLE_DOCS, embedding, persist_directory=str(tmp_path / "chroma"))
+    _override_ai_deps(vs, [])
+
+    with patch("app.api.emails.fetch_and_process_unseen_emails") as mock_fetch:
+        mock_fetch.return_value = {"fetched": 3, "processed": 2, "failed": 1}
+        response = client.post("/emails/fetch")
+
+    assert response.status_code == 200
+    assert response.json() == {"fetched": 3, "processed": 2, "failed": 1}
+    mock_fetch.assert_called_once()
+
+
+def test_fetch_endpoint_returns_503_when_imap_not_configured(client, tmp_path):
+    embedding = DeterministicFakeEmbeddings()
+    vs = build_vectorstore(SAMPLE_DOCS, embedding, persist_directory=str(tmp_path / "chroma"))
+    _override_ai_deps(vs, [])
+
+    with patch("app.api.emails.fetch_and_process_unseen_emails") as mock_fetch:
+        mock_fetch.side_effect = IMAPConnectionError("IMAP is not configured.")
+        response = client.post("/emails/fetch")
+
+    assert response.status_code == 503
+    assert "IMAP is not configured" in response.json()["detail"]
 
 
 def test_missing_vectorstore_index_returns_actionable_503(client):

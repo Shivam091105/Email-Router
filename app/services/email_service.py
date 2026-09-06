@@ -43,6 +43,56 @@ def create_email(
     )
 
 
+def process_parsed_email_sync(parsed: dict, llm_client, vectorstore) -> bool:
+    """
+    Entry point for IMAP-fetched emails (POST /emails/fetch). Creates the
+    Email row from a parsed IMAP message dict (see email_parser.py for
+    its shape) and runs it through process_email() — the exact same
+    function POST /emails hands to BackgroundTasks.
+
+    Called synchronously rather than via BackgroundTasks: /emails/fetch
+    is an on-demand batch trigger, not a latency-sensitive per-request
+    endpoint, and the IMAP layer needs to know per-message whether to
+    mark it \\Seen before moving to the next one — that requires waiting
+    for the result, which BackgroundTasks doesn't give us. This is the
+    ONE place IMAP-sourced and API-sourced emails diverge; everything
+    downstream of create_email() is identical.
+
+    Returns True if the email was durably created and handed to the
+    pipeline — regardless of the classification OUTCOME. ROUTED,
+    REVIEW_REQUIRED, and FAILED are all legitimate terminal states that
+    process_email() already persists correctly; none of them mean the
+    IMAP message should be re-fetched. This returns False only if the
+    email couldn't even be created (e.g. the database was unreachable),
+    which IS worth retrying on the next fetch.
+    """
+    body = parsed.get("body_text") or parsed.get("body_html") or ""
+    attachments = parsed.get("attachments") or []
+    attachment_filename = attachments[0]["filename"] if attachments else None
+
+    db = SessionLocal()
+    try:
+        email = create_email(
+            db,
+            sender=parsed.get("sender", ""),
+            subject=parsed.get("subject", ""),
+            body=body,
+            attachment_filename=attachment_filename,
+        )
+        email_id = email.id
+    except Exception:
+        logger.exception("Failed to create Email row from IMAP message (sender=%s)", parsed.get("sender"))
+        return False
+    finally:
+        db.close()
+
+    # process_email() already catches its own exceptions internally and
+    # writes a FAILED status rather than raising further — see its
+    # docstring above. We don't need a try/except here for that reason.
+    process_email(email_id, llm_client, vectorstore)
+    return True
+
+
 def process_email(email_id: int, llm_client, vectorstore) -> None:
     """
     Runs the LangGraph workflow for one email and persists the result.

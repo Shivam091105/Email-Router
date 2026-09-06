@@ -14,9 +14,10 @@ from sqlalchemy.orm import Session
 from app.core.dependencies import get_llm_client, get_vectorstore
 from app.database import repositories
 from app.database.database import get_db
+from app.integrations.imap_client import IMAPConnectionError, fetch_and_process_unseen_emails
 from app.llm.client import LLMClient
 from app.schemas.email import EmailCreate, EmailDetailOut, EmailOut, SummaryOut
-from app.services.email_service import create_email, process_email
+from app.services.email_service import create_email, process_email, process_parsed_email_sync
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/emails", tags=["emails"])
@@ -40,6 +41,31 @@ def submit_email(
     background_tasks.add_task(process_email, email.id, llm_client, vectorstore)
 
     return email
+
+
+@router.post("/fetch")
+def fetch_from_imap(
+    limit: int = 20,
+    llm_client: LLMClient = Depends(get_llm_client),
+    vectorstore=Depends(get_vectorstore),
+):
+    """
+    Manually triggers an IMAP fetch: pulls unseen emails from the mailbox
+    configured via IMAP_HOST/IMAP_USER/IMAP_PASSWORD in .env, and runs
+    each one through the SAME pipeline as POST /emails (see
+    process_parsed_email_sync's docstring for why this call is
+    synchronous rather than a background task).
+
+    This is a manually-triggered, one-shot fetch — not continuous
+    polling. Call it again whenever you want to check for new mail.
+    """
+    def process_fn(parsed: dict) -> bool:
+        return process_parsed_email_sync(parsed, llm_client, vectorstore)
+
+    try:
+        return fetch_and_process_unseen_emails(process_fn, limit=limit)
+    except IMAPConnectionError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
 
 
 @router.get("", response_model=list[EmailOut])

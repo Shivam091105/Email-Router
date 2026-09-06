@@ -42,6 +42,7 @@ class Settings(BaseSettings):
 
     # --- Email integration ---
     imap_host: str | None = None
+    imap_port: int = 993
     imap_user: str | None = None
     imap_password: str | None = None
     smtp_host: str | None = None
