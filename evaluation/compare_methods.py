@@ -6,11 +6,13 @@ and writes a markdown report to evaluation/comparison_report.md.
     Approach 2: llm_only.classify_llm_only                   (LLM, no retrieval)
     Approach 3: classification_service.classify_email        (RAG + LLM, production path)
 
-Approaches 2 and 3 make real Hugging Face Inference API calls - one per
-email in the dataset, per approach - so running this fully requires
-HUGGINGFACEHUB_API_TOKEN in .env and will take a few minutes for a
-~80-item dataset. No numbers in this script are hardcoded; every value in
-the generated report is computed from an actual run.
+Approaches 2 and 3 make real calls: Approach 2 calls Groq's free LLM API
+(no credit card required — see GROQ_API_KEY in .env), and Approach 3 also
+uses locally-run embeddings (no API, no cost). Running this fully needs
+GROQ_API_KEY in .env and will take a few minutes for a ~80-item dataset,
+subject to Groq's free-tier rate limits. No numbers in this script are
+hardcoded; every value in the generated report is computed from an
+actual run.
 
 Usage:
     python -m evaluation.compare_methods

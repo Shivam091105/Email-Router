@@ -67,7 +67,7 @@ flowchart TB
 
     DB[(PostgreSQL)]
     CHROMA[(Chroma vector store)]
-    HF[Hugging Face Inference API<br/>embeddings + LLM]
+    HF[Groq LLM API +<br/>local embeddings]
     MAIL[Mail server<br/>IMAP / SMTP]
 
     UI --> ROUTES
@@ -104,7 +104,7 @@ sequenceDiagram
     participant BG as Background Task
     participant G as LangGraph
     participant V as Chroma
-    participant L as Hugging Face LLM
+    participant L as Groq LLM
 
     U->>API: POST /emails
     API->>DB: INSERT Email (status=PENDING)
@@ -167,19 +167,20 @@ plain function chain would need its own ad hoc branching logic, hand-rolled.
 ```mermaid
 flowchart LR
     A[data/departments.json] -->|one Document per team| B[loader.py]
-    B --> C[Hugging Face Inference API embeddings]
+    B --> C[Local sentence-transformers<br/>embeddings, CPU]
     C --> D[(Chroma index)]
-    E[Incoming email] --> F[embed query]
+    E[Incoming email] --> F[embed query locally]
     F --> D
     D -->|top-k similar teams| G[format_context]
-    G --> H[Classification prompt]
+    G --> H[Classification prompt<br/>sent to Groq]
 ```
 
 - **One document per team, not per department** — the classification
   target is team-level, so retrieval granularity matches the decision.
-- **Embeddings via the Hugging Face Inference API** (remote), not local
-  `sentence-transformers`/`torch` — lighter dependencies, better Python
-  3.13 compatibility, no local model download.
+- **Embeddings run locally** via `sentence-transformers` (CPU), not a
+  remote API — no account, no payment method, no per-call cost or
+  network dependency once the model is cached. `HuggingFaceInferenceEmbeddings`
+  remains in the codebase for anyone with Hugging Face billing configured.
 - **The LLM never invents a `team_id`** — `classification_service.py`
   enforces that the returned `team_id` is one of the retrieved
   candidates' IDs, in code, not just via prompt instructions.
@@ -323,7 +324,7 @@ Run it yourself:
 ```bash
 python -m scripts.generate_evaluation_dataset   # (re)generate the dataset
 python -m evaluation.evaluate_classification    # keyword baseline only, no token needed
-python -m evaluation.compare_methods            # all three approaches, needs HUGGINGFACEHUB_API_TOKEN
+python -m evaluation.compare_methods            # all three approaches, needs GROQ_API_KEY
 ```
 
 ### Actual results from this dataset
@@ -351,14 +352,13 @@ once wording diverges ("reworded") or vocabulary overlaps between
 similar teams ("confusable"). Semantic embeddings are specifically meant
 to close that gap, since they match on meaning rather than exact words.
 
-**LLM-only and RAG+LLM numbers are not included here** — both require
-real calls to the Hugging Face Inference API, which this development
-environment could not reach (network policy blocks `huggingface.co`).
-Run `python -m evaluation.compare_methods` yourself with a valid
-`HUGGINGFACEHUB_API_TOKEN`; it writes real, computed numbers to
-`evaluation/comparison_report.md`. Per the project's own rule — do not
-fabricate results — that comparison is left for you to actually run
-rather than invented here.
+**LLM-only and RAG+LLM numbers are not included here** — they require a
+real `GROQ_API_KEY` (free, no card needed — see Setup instructions), which
+this development sandbox could not obtain interactively. Run
+`python -m evaluation.compare_methods` yourself; it writes real, computed
+numbers to `evaluation/comparison_report.md`. Per the project's own rule —
+do not fabricate results — that comparison is left for you to actually
+run rather than invented here.
 
 ### Why each major technology, backed by evidence where we have it
 
@@ -400,9 +400,22 @@ rather than invented here.
 cp .env.example .env
 ```
 
-Get a free Hugging Face token at https://huggingface.co/settings/tokens
-and set `HUGGINGFACEHUB_API_TOKEN` in `.env` (required for real
-embeddings/classification; not required to run the test suite).
+Get a **free Groq API key** (no credit card required) at
+https://console.groq.com/keys and set `GROQ_API_KEY` in `.env`. This
+powers classification and summarization.
+
+Embeddings run **locally** via `sentence-transformers` — no API key, no
+account, no cost. The first run downloads the model (~90MB) and caches
+it locally.
+
+> **Why not Hugging Face for everything?** HF's Inference Providers now
+> require a payment method on file even to use free-tier credits — a real
+> barrier for a portfolio project with no budget. Groq's free tier
+> requires no card at all, and running embeddings locally sidesteps the
+> issue entirely for that piece. The `HuggingFaceLLMClient` /
+> `HuggingFaceInferenceEmbeddings` classes are still in the codebase if
+> you do have HF billing set up and want to use them instead — see
+> `app/core/dependencies.py`.
 
 ### 2. Start Postgres
 
@@ -414,6 +427,24 @@ docker compose up -d db
 
 Requires **Python 3.13** (3.12+ also supported — every dependency
 publishes compatible wheels for either).
+
+> **Windows note**: `psycopg2-binary` only ships prebuilt Python 3.13
+> wheels from version `2.9.10` onward — `requirements.txt` is pinned to
+> `2.9.12` specifically for this reason. Using an older pin on Windows
+> makes pip fall back to compiling from source, which fails with a
+> `_PyInterpreterState_Get` link error (a real Python 3.13 C-API
+> incompatibility in that older build, not a local setup problem).
+
+> **Optional — smaller download**: `pip install -r requirements-dev.txt`
+> pulls the standard `torch` wheel, which bundles full CUDA support
+> (~2GB) even though this project only runs a small embedding model on
+> CPU. This works fine as-is; if you'd rather save the download size,
+> install the CPU-only build from PyTorch's own index *before* running
+> the command below — pip will then see torch is already satisfied and
+> won't fetch the CUDA version:
+> ```bash
+> pip install torch==2.9.1 --index-url https://download.pytorch.org/whl/cpu
+> ```
 
 ```bash
 python -m venv .venv
@@ -455,9 +486,9 @@ Visit http://localhost:8501.
 ## Environment variables
 
 See `.env.example` for the full list with inline comments. Only
-`DATABASE_URL` and `HUGGINGFACEHUB_API_TOKEN` are needed for a typical
-local run; IMAP/SMTP variables are optional and only used for real
-mailbox integration.
+`DATABASE_URL` and `GROQ_API_KEY` are needed for a typical local run
+(embeddings run locally, no key needed); IMAP/SMTP variables are optional
+and only used for real mailbox integration.
 
 ---
 
@@ -477,9 +508,11 @@ restarts mid-processing or scale workers independently of the API itself.
 
 > **Note**: the Chroma index needs to exist before the API can classify
 > anything. Either build it into the image (`RUN python -m scripts.build_index`
-> in the Dockerfile, with the token available at build time) or run it
+> in the Dockerfile — no API key needed, embeddings run locally) or run it
 > once against the running `api` container:
-> `docker compose exec api python -m scripts.build_index`.
+> `docker compose exec api python -m scripts.build_index`. `GROQ_API_KEY`
+> needs to be set (via `.env`) for classification/summarization to work
+> once the API is serving requests.
 
 ---
 
@@ -503,7 +536,7 @@ pytest tests/ -v
 | `test_pdf_parser.py` | PDF text extraction, including per-page failure handling |
 | `test_evaluation.py` | Metric computation correctness, keyword baseline logic |
 
-External-service code (real Hugging Face API calls, real IMAP/SMTP
+External-service code (real Groq API calls, real IMAP/SMTP
 connections) is deliberately **not** unit tested — see
 [Limitations](#limitations) — since doing so would make the suite
 flaky and dependent on credentials/network, which the project's own

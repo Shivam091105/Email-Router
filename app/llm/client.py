@@ -25,8 +25,37 @@ class LLMClient(ABC):
         """Returns the raw text completion for `prompt`."""
 
 
+class GroqLLMClient(LLMClient):
+    """
+    Calls a chat model via Groq's free API (no credit card required, as
+    opposed to Hugging Face's current Inference Providers billing model).
+    Groq's API is OpenAI-compatible under the hood, but we use their
+    official `groq` SDK directly to keep the dependency explicit.
+    """
+
+    def __init__(self, model_name: str | None = None, api_key: str | None = None):
+        from groq import Groq
+
+        self.model_name = model_name or settings.llm_model_name
+        self._client = Groq(api_key=api_key or settings.groq_api_key)
+
+    def generate(self, prompt: str, max_new_tokens: int = 512) -> str:
+        response = self._client.chat.completions.create(
+            model=self.model_name,
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=max_new_tokens,
+            temperature=0.0,
+        )
+        return response.choices[0].message.content
+
+
 class HuggingFaceLLMClient(LLMClient):
-    """Calls a chat-capable model via the Hugging Face Inference API."""
+    """
+    Calls a chat-capable model via the Hugging Face Inference API. Kept
+    for reference / for anyone with HF billing set up; GroqLLMClient is
+    the default (see app/core/dependencies.py) since it requires no
+    payment method for free-tier usage.
+    """
 
     def __init__(self, model_name: str | None = None, api_token: str | None = None):
         self.model_name = model_name or settings.llm_model_name

@@ -12,8 +12,11 @@ langchain-community==0.4.2
 langchain-chroma==1.1.0
 langchain-huggingface==1.2.2
 chromadb==1.5.9
-huggingface-hub==1.29.0
+huggingface-hub==0.36.2
 numpy==2.1.3
+torch==2.9.1
+sentence-transformers==5.1.2
+groq==1.7.0
 
 # --- LangGraph (Phase 4) ---
 langgraph==1.2.11

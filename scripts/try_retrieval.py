@@ -4,9 +4,9 @@ knowledge base — not an automated test (that's tests/test_rag.py), but a
 quick way to eyeball "does this actually retrieve sensible teams" before
 wiring retrieval into the Phase 3 classification prompt.
 
-By default this uses the real Hugging Face Inference API (requires
-HUGGINGFACEHUB_API_TOKEN in .env) so you're judging real semantic
-retrieval quality, not the fake test embeddings.
+Uses local sentence-transformers embeddings by default — no API key
+needed, so this is judging real semantic retrieval quality, not the fake
+test embeddings, with zero external dependency.
 
 Usage:
     python -m scripts.try_retrieval "I can't log into my account"
@@ -15,7 +15,7 @@ Usage:
 import sys
 
 from app.core.logging import configure_logging
-from app.rag.embeddings import HuggingFaceInferenceEmbeddings
+from app.rag.embeddings import LocalSentenceTransformerEmbeddings
 from app.rag.retriever import retrieve_teams
 from app.rag.vectorstore import load_vectorstore
 
@@ -28,7 +28,7 @@ def main() -> None:
         sys.exit(1)
 
     query = " ".join(sys.argv[1:])
-    embedding = HuggingFaceInferenceEmbeddings()
+    embedding = LocalSentenceTransformerEmbeddings()
     vectorstore = load_vectorstore(embedding)
 
     results = retrieve_teams(vectorstore, query, k=3)

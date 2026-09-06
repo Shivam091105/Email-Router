@@ -27,9 +27,15 @@ class Settings(BaseSettings):
     database_url: str = "postgresql://postgres:postgres@localhost:5432/email_router"
 
     # --- LLM / embeddings ---
+    # Groq is the default LLM provider: free tier, no credit card required.
+    groq_api_key: str | None = None
+    llm_model_name: str = "openai/gpt-oss-20b"
+
+    # Embeddings run locally by default (sentence-transformers, no API key
+    # needed). huggingfacehub_api_token is only used if you explicitly
+    # switch to HuggingFaceInferenceEmbeddings/HuggingFaceLLMClient.
     huggingfacehub_api_token: str | None = None
     embedding_model_name: str = "sentence-transformers/all-MiniLM-L6-v2"
-    llm_model_name: str = "meta-llama/Llama-3.1-8B-Instruct"
     chroma_persist_dir: str = "chroma_db"
     retrieval_top_k: int = 3
     confidence_threshold: float = 0.80

@@ -147,10 +147,19 @@ def test_submit_email_validates_empty_body(client, tmp_path):
 def test_missing_vectorstore_index_returns_actionable_503(client):
     """
     Regression test: hitting POST /emails before the Chroma index has been
-    built (get_vectorstore() raises FileNotFoundError) must return a clear
-    503 with instructions, not an opaque 500. No dependency override here
-    is deliberate — we want the REAL get_vectorstore() to run and fail.
+    built must return a clear 503 with instructions, not an opaque 500.
+
+    We override get_vectorstore() with a fake that raises FileNotFoundError
+    directly (rather than calling the real load_vectorstore(), which now
+    also depends on a local embedding model being downloadable/cached —
+    a real network dependency we don't want this test coupled to).
     """
+    def raise_not_found():
+        raise FileNotFoundError("No Chroma index found")
+
+    app.dependency_overrides[get_llm_client] = lambda: FakeLLMClient(responses=[])
+    app.dependency_overrides[get_vectorstore] = raise_not_found
+
     response = client.post("/emails", json={"sender": "a@b.com", "subject": "x", "body": "some content"})
     assert response.status_code == 503
     assert "build_index" in response.json()["detail"]
