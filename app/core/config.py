@@ -28,28 +28,34 @@ class Settings(BaseSettings):
 
     # --- LLM / embeddings ---
     # Groq is the default LLM provider: free tier, no credit card required.
-    groq_api_key: str | None = None
+    groq_api_key: str = "***REMOVED***"
     llm_model_name: str = "openai/gpt-oss-20b"
 
     # Embeddings run locally by default (sentence-transformers, no API key
     # needed). huggingfacehub_api_token is only used if you explicitly
     # switch to HuggingFaceInferenceEmbeddings/HuggingFaceLLMClient.
-    huggingfacehub_api_token: str | None = None
+    huggingfacehub_api_token: str = "***REMOVED***"
     embedding_model_name: str = "sentence-transformers/all-MiniLM-L6-v2"
     chroma_persist_dir: str = "chroma_db"
     retrieval_top_k: int = 3
     confidence_threshold: float = 0.80
 
     # --- Email integration ---
-    imap_host: str | None = None
+    imap_host: str = "imap.gmail.com"
     imap_port: int = 993
-    imap_user: str | None = None
-    imap_password: str | None = None
-    smtp_host: str | None = None
+    imap_user: str = "okkutsu08@gmail.com"
+    imap_password: str = "***REMOVED***"
+    smtp_host: str = "smtp.gmail.com"
     smtp_port: int = 587
-    smtp_user: str | None = None
-    smtp_password: str | None = None
+    smtp_user: str = "okkutsu08@gmail.com"
+    smtp_password: str = "***REMOVED***"
     max_attachment_size_mb: int = 10
+
+    # --- Kafka ---
+    # Default points to the Docker Compose service name.  For local dev
+    # against a container-based broker, use localhost:9092 in .env.
+    kafka_bootstrap_servers: str = "kafka:29092"
+    kafka_enabled: bool = True
 
     model_config = SettingsConfigDict(
         env_file=".env",

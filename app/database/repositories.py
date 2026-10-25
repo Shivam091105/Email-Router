@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.database.models import Email, Review, RoutingResult
+from app.database.models import Email, Review, RoutingResult, SecurityScreening
 
 
 # ---------- Email ----------
@@ -25,6 +25,8 @@ def create_email(
     body: str,
     attachment_text: str = "",
     attachment_filename: str | None = None,
+    status: str = "PENDING",
+
 ) -> Email:
     email = Email(
         sender=sender,
@@ -32,8 +34,9 @@ def create_email(
         body=body,
         attachment_text=attachment_text,
         attachment_filename=attachment_filename,
-        status="PENDING",
+        status=status,
     )
+
     db.add(email)
     db.commit()
     db.refresh(email)
@@ -57,6 +60,12 @@ def update_email_status(db: Session, email_id: int, status: str) -> Email | None
     db.commit()
     db.refresh(email)
     return email
+
+
+def list_emails_by_status(db: Session, status: str, limit: int = 100) -> list[Email]:
+    """Find emails with a given status — used for recovery sweeps (e.g. KAFKA_FAILED)."""
+    stmt = select(Email).where(Email.status == status).limit(limit)
+    return list(db.scalars(stmt))
 
 
 # ---------- RoutingResult ----------
@@ -144,6 +153,38 @@ def submit_review_decision(
     return review
 
 
+# ---------- SecurityScreening ----------
+
+def create_security_screening(
+    db: Session,
+    email_id: int,
+    decision: str,
+    risk_score: float,
+    explanation: str,
+    detection_count: int = 0,
+    sensitive_content_found: bool = False,
+    phishing_signals_found: bool = False,
+) -> SecurityScreening:
+    screening = SecurityScreening(
+        email_id=email_id,
+        decision=decision,
+        risk_score=risk_score,
+        explanation=explanation,
+        detection_count=detection_count,
+        sensitive_content_found=sensitive_content_found,
+        phishing_signals_found=phishing_signals_found,
+    )
+    db.add(screening)
+    db.commit()
+    db.refresh(screening)
+    return screening
+
+
+def get_security_screening(db: Session, email_id: int) -> SecurityScreening | None:
+    stmt = select(SecurityScreening).where(SecurityScreening.email_id == email_id)
+    return db.scalars(stmt).first()
+
+
 # ---------- Analytics ----------
 
 def get_analytics_summary(db: Session) -> dict:
@@ -160,6 +201,13 @@ def get_analytics_summary(db: Session) -> dict:
     )
     avg_confidence = db.scalar(select(func.avg(RoutingResult.confidence))) or 0.0
 
+    quarantined = db.scalar(
+        select(func.count()).select_from(Email).where(Email.status == "QUARANTINED")
+    ) or 0
+    security_review = db.scalar(
+        select(func.count()).select_from(Email).where(Email.status == "SECURITY_REVIEW")
+    ) or 0
+
     by_department_rows = db.execute(
         select(RoutingResult.department, func.count()).group_by(RoutingResult.department)
     ).all()
@@ -172,7 +220,10 @@ def get_analytics_summary(db: Session) -> dict:
         "auto_routed": routed,
         "human_reviewed": reviewed,
         "review_required": review_required,
+        "quarantined": quarantined,
+        "security_review": security_review,
         "average_confidence": round(float(avg_confidence), 4),
         "by_department": {row[0]: row[1] for row in by_department_rows},
         "by_team": {row[0]: row[1] for row in by_team_rows},
     }
+

@@ -24,6 +24,8 @@ def test_health_endpoint_shape():
     response = client.get("/health")
     assert response.status_code == 200
     body = response.json()
-    assert set(body.keys()) == {"status", "app_env", "database"}
+    assert set(body.keys()) == {"status", "app_env", "database", "kafka"}
     assert body["status"] in {"ok", "degraded"}
     assert body["database"] in {"connected", "unreachable"}
+    assert body["kafka"] in {"connected", "unreachable", "disabled"}
+

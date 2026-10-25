@@ -31,6 +31,18 @@ class RoutingResultOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class SecurityScreeningOut(BaseModel):
+    decision: str
+    risk_score: float
+    explanation: str
+    detection_count: int
+    sensitive_content_found: bool
+    phishing_signals_found: bool
+    screened_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
 class EmailOut(BaseModel):
     id: int
     sender: str
@@ -45,6 +57,7 @@ class EmailOut(BaseModel):
 
 class EmailDetailOut(EmailOut):
     routing_result: RoutingResultOut | None = None
+    security_screening: SecurityScreeningOut | None = None
 
 
 class SummaryOut(BaseModel):
@@ -77,6 +90,8 @@ class AnalyticsOut(BaseModel):
     auto_routed: int
     human_reviewed: int
     review_required: int
+    quarantined: int = 0
+    security_review: int = 0
     average_confidence: float
     by_department: dict[str, int]
     by_team: dict[str, int]

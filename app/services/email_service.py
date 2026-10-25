@@ -18,9 +18,12 @@ import logging
 
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.database import repositories
 from app.database.database import SessionLocal
 from app.graph.workflow import run_email_workflow
+from app.security.decision import redact_sensitive_content
+from app.security.scanner import screen_email
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +35,10 @@ def create_email(
     body: str,
     attachment_text: str = "",
     attachment_filename: str | None = None,
+    status: str | None = None,
 ):
+    if status is None:
+        status = "PENDING_SECURITY" if settings.kafka_enabled else "PENDING"
     return repositories.create_email(
         db,
         sender=sender,
@@ -40,6 +46,7 @@ def create_email(
         body=body,
         attachment_text=attachment_text,
         attachment_filename=attachment_filename,
+        status=status,
     )
 
 
@@ -95,7 +102,8 @@ def process_parsed_email_sync(parsed: dict, llm_client, vectorstore) -> bool:
 
 def process_email(email_id: int, llm_client, vectorstore) -> None:
     """
-    Runs the LangGraph workflow for one email and persists the result.
+    Runs security screening (if not already done) and the LangGraph workflow
+    for one email, persisting results.
 
     Designed to be handed to FastAPI's BackgroundTasks, so it opens its
     own DB session (via SessionLocal, the app's real session factory)
@@ -108,7 +116,44 @@ def process_email(email_id: int, llm_client, vectorstore) -> None:
         if email is None:
             logger.error("process_email called for nonexistent email_id=%s", email_id)
             return
-        sender, subject, body, attachment_text = email.sender, email.subject, email.body, email.attachment_text
+
+        # Inline security screening if not already screened
+        screening = repositories.get_security_screening(db, email_id)
+        if screening is None:
+            decision, scan_result = screen_email(
+                subject=email.subject,
+                body=email.body,
+                sender=email.sender,
+                attachment_text=email.attachment_text or "",
+                attachment_filename=email.attachment_filename,
+            )
+            repositories.create_security_screening(
+                db,
+                email_id=email_id,
+                decision=decision.outcome,
+                risk_score=decision.risk_score,
+                explanation=decision.explanation,
+                detection_count=scan_result.total_detections,
+                sensitive_content_found=scan_result.sensitive_content_found,
+                phishing_signals_found=scan_result.phishing_signals_found,
+            )
+
+            if decision.outcome == "QUARANTINED":
+                repositories.update_email_status(db, email_id, "QUARANTINED")
+                logger.warning("Email %s quarantined during inline security screening", email_id)
+                return
+            if decision.outcome == "REVIEW_REQUIRED":
+                repositories.update_email_status(db, email_id, "SECURITY_REVIEW")
+                logger.info("Email %s sent to SECURITY_REVIEW during inline security screening", email_id)
+                return
+
+            repositories.update_email_status(db, email_id, "APPROVED")
+            screening = repositories.get_security_screening(db, email_id)
+
+        sender, subject, body, attachment_text = email.sender, email.subject, email.body, email.attachment_text or ""
+        if screening and screening.sensitive_content_found:
+            body = redact_sensitive_content(body)
+            attachment_text = redact_sensitive_content(attachment_text)
     finally:
         db.close()
 
@@ -121,7 +166,7 @@ def process_email(email_id: int, llm_client, vectorstore) -> None:
             sender=sender,
             subject=subject,
             body=body,
-            attachment_text=attachment_text or "",
+            attachment_text=attachment_text,
         )
     except Exception:
         # The graph's own save_result node already handles expected
