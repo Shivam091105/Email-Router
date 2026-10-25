@@ -15,6 +15,8 @@ from app.core.config import settings
 from app.core.logging import configure_logging
 from app.database.database import Base, check_db_connection, engine
 from app.database import models  # noqa: F401 - ensures models are registered before create_all
+from app.kafka.admin import check_kafka_connection, ensure_kafka_topics
+from app.kafka.producer import close_producer
 
 configure_logging()
 logger = logging.getLogger(__name__)
@@ -29,10 +31,23 @@ async def lifespan(app: FastAPI):
         logger.info("Database tables verified/created")
     else:
         logger.warning("Database unreachable at startup; tables were not created")
+
+    if settings.kafka_enabled:
+        if check_kafka_connection(timeout=3.0):
+            ensure_kafka_topics()
+            logger.info("Kafka broker connected and topics verified")
+        else:
+            logger.warning(
+                "Kafka broker not ready at startup (bootstrap=%s). Application will start in tolerant mode; "
+                "requests will mark KAFKA_FAILED if broker is still unavailable.",
+                settings.kafka_bootstrap_servers,
+            )
+
     yield
-    # Shutdown (nothing to clean up yet; SQLAlchemy's engine pool handles
-    # connection teardown on process exit)
+
+    # Shutdown
     logger.info("Shutting down application")
+    close_producer()
 
 
 app = FastAPI(
@@ -71,20 +86,26 @@ async def vectorstore_not_found_handler(request: Request, exc: FileNotFoundError
 @app.get("/health", tags=["system"])
 def health_check() -> dict:
     """
-    Reports service liveness AND database connectivity.
+    Reports service liveness, database connectivity, and Kafka status.
 
     A /health endpoint that only checks "is the process running" is
-    misleading in a system where almost every real request needs the
-    database. So we check both, and report them separately, so it's
-    obvious from the response alone which part is broken if something
-    is down.
+    misleading in a system where requests depend on database and message broker.
+    We check both and report them separately.
     """
     db_ok = check_db_connection()
+    kafka_status = "disabled"
+    if settings.kafka_enabled:
+        kafka_ok = check_kafka_connection(timeout=1.5)
+        kafka_status = "connected" if kafka_ok else "unreachable"
+
+    overall_ok = db_ok and (kafka_status in ("connected", "disabled"))
     return {
-        "status": "ok" if db_ok else "degraded",
+        "status": "ok" if overall_ok else "degraded",
         "app_env": settings.app_env,
         "database": "connected" if db_ok else "unreachable",
+        "kafka": kafka_status,
     }
+
 
 
 @app.get("/", tags=["system"])

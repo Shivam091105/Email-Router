@@ -17,6 +17,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from app.core.config import settings
 from app.database import models  # noqa: F401 - registers models on Base
 from app.database.database import Base, get_db
 from app.main import app
@@ -53,8 +54,12 @@ def client(test_session_factory):
     # module-level SessionLocal directly, not the get_db dependency, since
     # they run outside the request's DI scope. Patch it at the source so
     # background-task DB writes land in the same test database.
+    original_kafka_enabled = settings.kafka_enabled
+    settings.kafka_enabled = False
     with patch("app.services.email_service.SessionLocal", test_session_factory):
         with TestClient(app) as c:
             yield c
 
+    settings.kafka_enabled = original_kafka_enabled
     app.dependency_overrides.clear()
+

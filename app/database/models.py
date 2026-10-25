@@ -35,9 +35,17 @@ class Email(Base):
     attachment_text: Mapped[str] = mapped_column(Text, nullable=True, default="")
     attachment_filename: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
-    # PENDING -> PROCESSING -> ROUTED | REVIEW_REQUIRED -> RESOLVED
-    # FAILED is used if the workflow could not complete (e.g. LLM failure).
-    status: Mapped[str] = mapped_column(String(50), nullable=False, default="PENDING")
+    # Full status lifecycle with Kafka + security screening:
+    #   PENDING_SECURITY -> (security screening) ->
+    #     APPROVED -> PROCESSING -> ROUTED | REVIEW_REQUIRED -> RESOLVED
+    #     SECURITY_REVIEW  (flagged, awaiting human review)
+    #     QUARANTINED      (high-risk, blocked from processing)
+    #   KAFKA_FAILED       (Kafka publish failed; eligible for retry sweep)
+    #   FAILED             (workflow error: LLM failure, etc.)
+    #
+    # Legacy status PENDING is kept for backward compatibility with
+    # existing emails created before Kafka integration.
+    status: Mapped[str] = mapped_column(String(50), nullable=False, default="PENDING_SECURITY")
 
     received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
@@ -46,6 +54,9 @@ class Email(Base):
         back_populates="email", uselist=False, cascade="all, delete-orphan"
     )
     review: Mapped["Review"] = relationship(
+        back_populates="email", uselist=False, cascade="all, delete-orphan"
+    )
+    security_screening: Mapped["SecurityScreening"] = relationship(
         back_populates="email", uselist=False, cascade="all, delete-orphan"
     )
 
@@ -89,3 +100,29 @@ class Review(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     email: Mapped["Email"] = relationship(back_populates="review")
+
+
+class SecurityScreening(Base):
+    """
+    Records the outcome of the security screening step for one email.
+
+    Persists the decision (APPROVED/REVIEW_REQUIRED/QUARANTINED), a
+    numeric risk score, a human-readable explanation of what was found,
+    and the number of detections — but NEVER the actual detected secret
+    values themselves.
+    """
+    __tablename__ = "security_screenings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    email_id: Mapped[int] = mapped_column(ForeignKey("emails.id"), unique=True, nullable=False)
+
+    decision: Mapped[str] = mapped_column(String(50), nullable=False)  # APPROVED | REVIEW_REQUIRED | QUARANTINED
+    risk_score: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    explanation: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    detection_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    sensitive_content_found: Mapped[bool] = mapped_column(nullable=False, default=False)
+    phishing_signals_found: Mapped[bool] = mapped_column(nullable=False, default=False)
+
+    screened_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    email: Mapped["Email"] = relationship(back_populates="security_screening")

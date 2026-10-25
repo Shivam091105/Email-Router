@@ -131,8 +131,10 @@ def test_analytics_endpoint_shape(client):
     body = response.json()
     assert set(body.keys()) == {
         "total_emails", "auto_routed", "human_reviewed",
-        "review_required", "average_confidence", "by_department", "by_team",
+        "review_required", "quarantined", "security_review",
+        "average_confidence", "by_department", "by_team",
     }
+
 
 
 def test_submit_email_validates_empty_body(client, tmp_path):

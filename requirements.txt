@@ -27,3 +27,6 @@ pypdf==6.16.2
 # --- Streamlit UI (Phase 7) ---
 streamlit==1.63.0
 requests==2.34.2
+
+# --- Kafka Integration ---
+confluent-kafka==2.16.0

@@ -627,27 +627,45 @@ and only used for real mailbox integration.
 
 ---
 
-## Docker
+## Docker & Kafka Architecture
+
+The full stack runs via Docker Compose with KRaft-based Apache Kafka (no ZooKeeper required):
 
 ```bash
 docker compose up --build
 ```
 
-Starts Postgres, the FastAPI API (port 8000), and Streamlit (port 8501)
-as three services from one `Dockerfile`, sharing the same image with
-different commands. Notably absent: Celery, RabbitMQ, Redis, Kubernetes —
-background processing uses FastAPI's built-in `BackgroundTasks`, which is
-sufficient at this scale (see the technology table above). A task queue
-would be a legitimate future addition if the API needed to survive
-restarts mid-processing or scale workers independently of the API itself.
+### Services
 
-> **Note**: the Chroma index needs to exist before the API can classify
-> anything. Either build it into the image (`RUN python -m scripts.build_index`
-> in the Dockerfile — no API key needed, embeddings run locally) or run it
-> once against the running `api` container:
-> `docker compose exec api python -m scripts.build_index`. `GROQ_API_KEY`
-> needs to be set (via `.env`) for classification/summarization to work
-> once the API is serving requests.
+| Service | Container / Port | Description |
+|---|---|---|
+| `db` | `postgres:16` (5432) | PostgreSQL persistence for emails, routing results, reviews, and security screenings |
+| `kafka` | `apache/kafka:3.8.0` (9092, 29092) | Single-node KRaft broker (`kafka:29092` internal, `localhost:9092` external host) |
+| `api` | FastAPI (8000) | Ingestion API (`POST /emails`), publishes to Kafka, falls back to `KAFKA_FAILED` if down |
+| `security-worker` | Python worker | Consumes `email-incoming`, screens content, routes to `email-approved`, `SECURITY_REVIEW`, or `QUARANTINED` |
+| `processing-worker` | Python worker | Consumes `email-approved`, runs LangGraph RAG + LLM classification |
+| `streamlit` | Streamlit (8501) | Triage dashboard, review queue, and analytics |
+
+### Verifying Kafka and Event Flow
+
+1. **Verify Kafka Broker is running:**
+   ```powershell
+   docker compose ps kafka
+   ```
+2. **List Kafka Topics:**
+   ```powershell
+   docker compose exec kafka /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list
+   ```
+   Expected topics: `email-incoming`, `email-approved`, `email-failed`.
+3. **Follow Consumer Worker Logs:**
+   ```powershell
+   docker compose logs -f security-worker processing-worker
+   ```
+4. **Inspect Service Health:**
+   ```powershell
+   curl http://localhost:8000/health
+   ```
+   Returns `{"status": "ok", "app_env": "development", "database": "connected", "kafka": "connected"}`.
 
 ---
 
@@ -657,11 +675,13 @@ restarts mid-processing or scale workers independently of the API itself.
 pytest tests/ -v
 ```
 
-53 tests, **zero network calls, zero external API dependency**:
+85 tests, **zero external API dependency, zero network calls**:
 
 | File | Covers |
 |---|---|
-| `test_health.py` | App boot, `/health` shape |
+| `test_security.py` | Regex pattern detectors (OTPs, credentials, API keys, phishing URLs, malicious extensions), risk scoring, quarantine rules, and LLM content redaction |
+| `test_kafka_integration.py` | Producer serialization, failure timeouts, security consumer decisions, idempotency, and admin topic management |
+| `test_health.py` | App boot, `/health` shape including database and Kafka connectivity reporting |
 | `test_rag.py` | Loader, vector store, retriever (fake embeddings) |
 | `test_classification.py` | Structured output validation, retry logic, team_id grounding guardrail (fake LLM) |
 | `test_graph.py` | All LangGraph branches: routed, review-required, failed (fake LLM + fake embeddings + SQLite) |
@@ -670,6 +690,7 @@ pytest tests/ -v
 | `test_email_parser.py` | MIME parsing, attachment size limits, filename sanitization |
 | `test_pdf_parser.py` | PDF text extraction, including per-page failure handling |
 | `test_evaluation.py` | Metric computation correctness, keyword baseline logic |
+
 
 External-service code (real Groq API calls, real IMAP/SMTP
 connections) is deliberately **not** unit tested — see

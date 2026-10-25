@@ -1,12 +1,9 @@
-# Full application stack: Postgres, the FastAPI API, and the Streamlit UI.
+# Full application stack: Postgres, single-node KRaft Kafka, FastAPI API,
+# security-screening worker, processing worker, and Streamlit UI.
 #
-# Notably absent: Celery/RabbitMQ/Redis. Background processing uses
-# FastAPI's built-in BackgroundTasks (see app/services/email_service.py),
-# which is sufficient at this scale — a task queue would be a genuine
-# future upgrade if the API process ever needed to survive restarts
-# mid-processing or scale workers independently, but isn't needed to
-# demonstrate this system's architecture. See README's "Why background
-# processing?" section.
+# Kafka runs in KRaft mode (no ZooKeeper required).
+# Internal containers communicate via kafka:29092.
+# Host machines (for local dev/testing) connect via localhost:9092.
 
 services:
   db:
@@ -26,18 +23,80 @@ services:
       timeout: 5s
       retries: 5
 
+  kafka:
+    image: apache/kafka:3.8.0
+    restart: unless-stopped
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:29092,PLAINTEXT_HOST://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_LOG_DIRS: /tmp/kraft-combined-logs
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
   api:
     build: .
     restart: unless-stopped
     env_file: .env
     environment:
       DATABASE_URL: postgresql://postgres:postgres@db:5432/email_router
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      KAFKA_ENABLED: "true"
     ports:
       - "8000:8000"
     volumes:
       - chroma_data:/app/chroma_db
     depends_on:
       db:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+
+  security-worker:
+    build: .
+    restart: unless-stopped
+    command: ["python", "-m", "app.kafka.security_consumer"]
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/email_router
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      KAFKA_ENABLED: "true"
+    depends_on:
+      db:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+
+  processing-worker:
+    build: .
+    restart: unless-stopped
+    command: ["python", "-m", "app.kafka.processing_consumer"]
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/email_router
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      KAFKA_ENABLED: "true"
+    volumes:
+      - chroma_data:/app/chroma_db
+    depends_on:
+      db:
+        condition: service_healthy
+      kafka:
         condition: service_healthy
 
   streamlit:
