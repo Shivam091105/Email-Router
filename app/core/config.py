@@ -28,13 +28,13 @@ class Settings(BaseSettings):
 
     # --- LLM / embeddings ---
     # Groq is the default LLM provider: free tier, no credit card required.
-    groq_api_key: str = "***REMOVED***"
+    groq_api_key: str = "[ENCRYPTION_KEY]"
     llm_model_name: str = "openai/gpt-oss-20b"
 
     # Embeddings run locally by default (sentence-transformers, no API key
     # needed). huggingfacehub_api_token is only used if you explicitly
     # switch to HuggingFaceInferenceEmbeddings/HuggingFaceLLMClient.
-    huggingfacehub_api_token: str = "***REMOVED***"
+    huggingfacehub_api_token: str =""
     embedding_model_name: str = "sentence-transformers/all-MiniLM-L6-v2"
     chroma_persist_dir: str = "chroma_db"
     retrieval_top_k: int = 3
@@ -43,12 +43,12 @@ class Settings(BaseSettings):
     # --- Email integration ---
     imap_host: str = "imap.gmail.com"
     imap_port: int = 993
-    imap_user: str = "okkutsu08@gmail.com"
-    imap_password: str = "***REMOVED***"
+    imap_user: str = "[EMAIL_ADDRESS]"
+    imap_password: str = ""
     smtp_host: str = "smtp.gmail.com"
     smtp_port: int = 587
-    smtp_user: str = "okkutsu08@gmail.com"
-    smtp_password: str = "***REMOVED***"
+    smtp_user: str = "[EMAIL_ADDRESS]"
+    smtp_password: str = ""
     max_attachment_size_mb: int = 10
 
     # --- Kafka ---
