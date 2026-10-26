@@ -3,7 +3,8 @@
 A backend system that classifies incoming organizational emails and routes
 them to the correct team, using retrieval-augmented generation (RAG) for
 grounding, an LLM for classification with structured/validated output,
-LangGraph for orchestration, and a human-in-the-loop review flow for
+LangGraph for orchestration, Apache Kafka for event-driven asynchronous
+processing and security screening, and a human-in-the-loop review flow for
 low-confidence predictions.
 
 **This is a portfolio prototype**, evaluated on a labeled synthetic
@@ -27,7 +28,7 @@ dataset — not a production system. See [Limitations](#limitations).
 12. [Setup instructions](#setup-instructions)
 13. [Running with a real Gmail inbox](#running-with-a-real-gmail-inbox)
 14. [Environment variables](#environment-variables)
-15. [Docker](#docker)
+15. [Docker & Kafka Architecture](#docker--kafka-architecture)
 16. [Testing](#testing)
 17. [Future improvements](#future-improvements)
 
@@ -38,15 +39,18 @@ dataset — not a production system. See [Limitations](#limitations).
 Large organizations receive emails that need to reach the right internal
 team — IT, Billing, HR, Legal, and so on. Manually triaging these is slow
 and error-prone. This project automates that triage: an email comes in,
-the system retrieves relevant organizational context, an LLM classifies
-it into a department/team with a confidence score, high-confidence
-predictions route automatically, and low-confidence ones go to a human
-reviewer.
+the system runs automated security screening (catching credentials, OTPs,
+phishing links, and dangerous attachments), retrieves relevant organizational
+context via RAG, and an LLM classifies it into a department/team with a
+confidence score. High-confidence predictions route automatically, while
+low-confidence or flagged emails go to a human reviewer.
 
-It's built as a **modular monolith** — one deployable FastAPI service,
-internally organized into clean layers — rather than microservices,
-because the system is small enough that network-hop complexity between
-separate services would add operational overhead without adding value.
+The system is built as an **event-driven architecture with Apache Kafka (KRaft)**:
+- **FastAPI Ingestion Service**: Validates requests, stores raw emails in PostgreSQL immediately (`status=PENDING_SECURITY`), and publishes events to Kafka with zero blocking on LLM inference.
+- **Security Screening Worker**: Consumes from `email-incoming`, runs regex-based security checks, updates PostgreSQL, and routes to safe (`email-approved`), review, or quarantine states.
+- **Processing Worker**: Consumes from `email-approved`, applies sensitive data redaction if needed, and executes the LangGraph RAG + LLM classification workflow.
+- **Streamlit UI**: Provides email triage dashboards, review queues, and analytics.
+- **Standalone Fallback**: If Kafka is disabled (`KAFKA_ENABLED=false`), the system gracefully falls back to in-process FastAPI `BackgroundTasks` with inline security screening.
 
 ---
 
@@ -54,32 +58,66 @@ separate services would add operational overhead without adding value.
 
 ```mermaid
 flowchart TB
-    subgraph Client
+    subgraph Clients
         UI[Streamlit UI]
-        API_CLIENT[API client / curl]
+        API_CLIENT[API Client / curl]
+        MAIL_IN[Inbound Mail<br/>IMAP Fetch]
     end
 
-    subgraph FastAPI Application
-        ROUTES[API layer<br/>emails / reviews / analytics]
-        SERVICES[Service layer<br/>email_service, classification_service,<br/>routing_service, summary_service]
-        GRAPH[LangGraph workflow]
-        REPO[Repository layer]
+    subgraph Ingestion [FastAPI Ingestion Service]
+        ROUTES[API Layer<br/>/emails, /reviews, /analytics, /health]
+        PRODUCER[Kafka Producer<br/>publish_email_event]
+        FALLBACK[BackgroundTasks<br/>fallback if Kafka disabled]
+    end
+
+    subgraph Kafka [Apache Kafka KRaft Broker]
+        T_INCOMING[Topic: email-incoming]
+        T_APPROVED[Topic: email-approved]
+        T_FAILED[Topic: email-failed<br/>Dead-Letter Queue]
+    end
+
+    subgraph SecurityWorker [Security Screening Worker]
+        SEC_CONSUMER[Kafka Consumer<br/>group: security-worker]
+        SCANNER[Security Scanner<br/>regex patterns, OTP, creds, phishing]
+    end
+
+    subgraph ProcessingWorker [Processing Worker]
+        PROC_CONSUMER[Kafka Consumer<br/>group: processing-worker]
+        REDACTOR[Content Redaction]
+        GRAPH[LangGraph Workflow<br/>RAG retrieval + LLM classification]
     end
 
     DB[(PostgreSQL)]
-    CHROMA[(Chroma vector store)]
-    HF[Groq LLM API +<br/>local embeddings]
-    MAIL[Mail server<br/>IMAP / SMTP]
+    CHROMA[(Chroma Vector Store)]
+    LLM[Groq LLM API +<br/>local embeddings]
+    MAIL_OUT[Mail Server<br/>SMTP Notification]
 
     UI --> ROUTES
     API_CLIENT --> ROUTES
-    ROUTES --> SERVICES
-    SERVICES --> GRAPH
+    MAIL_IN --> ROUTES
+
+    ROUTES --> DB
+    ROUTES --> PRODUCER
+    PRODUCER --> T_INCOMING
+    ROUTES -.KAFKA_ENABLED=false.-> FALLBACK
+    FALLBACK --> GRAPH
+
+    T_INCOMING --> SEC_CONSUMER
+    SEC_CONSUMER --> SCANNER
+    SEC_CONSUMER --> DB
+    SEC_CONSUMER --> T_APPROVED
+    SEC_CONSUMER -.exhausted retries.-> T_FAILED
+
+    T_APPROVED --> PROC_CONSUMER
+    PROC_CONSUMER --> REDACTOR
+    REDACTOR --> GRAPH
+    PROC_CONSUMER --> DB
+    PROC_CONSUMER -.exhausted retries.-> T_FAILED
+
     GRAPH --> CHROMA
-    GRAPH --> HF
-    SERVICES --> REPO
-    REPO --> DB
-    SERVICES -.optional.-> MAIL
+    GRAPH --> LLM
+    GRAPH --> DB
+    GRAPH -.optional.-> MAIL_OUT
 ```
 
 **Layers, and why each exists:**
@@ -87,7 +125,9 @@ flowchart TB
 | Layer | Responsibility |
 |---|---|
 | API (`app/api/`) | Request validation (Pydantic), HTTP status codes — no business logic |
-| Service (`app/services/`) | Orchestrates use cases: create an email, run classification, send notifications |
+| Service (`app/services/`) | Orchestrates use cases: email ingestion, classification, routing, team notification |
+| Kafka (`app/kafka/`) | KRaft event producer, consumer worker loops (`security_consumer.py`, `processing_consumer.py`), admin topic management, retry & dead-letter logic |
+| Security (`app/security/`) | Deterministic regex detectors (credentials, OTPs, API keys, phishing links, dangerous file extensions), risk scoring, and LLM sensitive content redaction |
 | Graph (`app/graph/`) | The actual multi-step, conditionally-branching workflow (LangGraph) |
 | RAG (`app/rag/`) | Knowledge base loading, embeddings, vector store, retrieval, prompts |
 | Repository (`app/database/repositories.py`) | Every direct SQL query lives here — the only file that would change if we switched ORMs |
@@ -99,34 +139,49 @@ flowchart TB
 
 ```mermaid
 sequenceDiagram
-    participant U as User/API client
-    participant API as FastAPI
+    participant U as User / Client
+    participant API as FastAPI Ingestion
+    participant K as Kafka Broker
+    participant SEC as Security Worker
+    participant PROC as Processing Worker
     participant DB as PostgreSQL
-    participant BG as Background Task
-    participant G as LangGraph
-    participant V as Chroma
-    participant L as Groq LLM
+    participant G as LangGraph (RAG+LLM)
 
     U->>API: POST /emails
-    API->>DB: INSERT Email (status=PENDING)
+    API->>DB: INSERT Email (status=PENDING_SECURITY)
+    API->>K: publish_email_event(email-incoming)
     API-->>U: 201 Created (immediately)
-    API->>BG: schedule process_email()
-    BG->>G: run_email_workflow()
-    G->>V: retrieve top-k candidate teams
-    G->>L: classify (structured JSON)
-    L-->>G: {department, team, team_id, confidence, reasoning}
-    alt confidence >= threshold
-        G->>DB: status=ROUTED, save RoutingResult
-    else confidence < threshold
-        G->>DB: status=REVIEW_REQUIRED, save RoutingResult + Review
+
+    K->>SEC: consume email-incoming
+    SEC->>SEC: screen_email() (credentials, phishing, extensions)
+    SEC->>DB: INSERT SecurityScreening
+
+    alt Security Approved
+        SEC->>DB: UPDATE status=APPROVED
+        SEC->>K: publish_email_event(email-approved)
+        SEC->>K: commit offset
+
+        K->>PROC: consume email-approved
+        PROC->>DB: UPDATE status=PROCESSING
+        opt Sensitive Content Found (Low Risk)
+            PROC->>PROC: redact_sensitive_content()
+        end
+        PROC->>G: run_email_workflow()
+        G->>DB: UPDATE status=ROUTED or REVIEW_REQUIRED, save RoutingResult
+        PROC->>K: commit offset
+    else Security Flagged (Suspicious)
+        SEC->>DB: UPDATE status=SECURITY_REVIEW, INSERT Review
+        SEC->>K: commit offset
+    else Security Quarantined (Malicious)
+        SEC->>DB: UPDATE status=QUARANTINED
+        SEC->>K: commit offset
     end
-    U->>API: GET /emails/{id}
-    API->>DB: fetch
-    API-->>U: email + classification
 ```
 
-The response to `POST /emails` returns **before** classification runs —
-see the "Why background processing?" row in the technology table below.
+The response to `POST /emails` returns **immediately** with `status: PENDING_SECURITY`
+as soon as the email is saved to PostgreSQL and published to Kafka.
+- If Kafka is unreachable during ingestion, the email is marked `KAFKA_FAILED` so it can be retried without data loss.
+- If Kafka is disabled (`KAFKA_ENABLED=false`), the system executes security screening inline and schedules the workflow via FastAPI `BackgroundTasks`.
 
 ---
 
@@ -197,6 +252,7 @@ flowchart LR
 erDiagram
     EMAIL ||--o| ROUTING_RESULT : has
     EMAIL ||--o| REVIEW : has
+    EMAIL ||--o| SECURITY_SCREENING : has
 
     EMAIL {
         int id PK
@@ -204,9 +260,21 @@ erDiagram
         string subject
         text body
         text attachment_text
+        string attachment_filename
         string status
         datetime received_at
         datetime created_at
+    }
+    SECURITY_SCREENING {
+        int id PK
+        int email_id FK
+        string decision
+        float risk_score
+        text explanation
+        int detection_count
+        bool sensitive_content_found
+        bool phishing_signals_found
+        datetime screened_at
     }
     ROUTING_RESULT {
         int id PK
@@ -232,12 +300,24 @@ erDiagram
     }
 ```
 
-`Email.status` values: `PENDING → PROCESSING → ROUTED | REVIEW_REQUIRED |
-FAILED`, and `REVIEW_REQUIRED → RESOLVED` once a human decides.
+**Complete status lifecycle with Kafka & security screening:**
+
+* `PENDING_SECURITY`: Raw email persisted in PostgreSQL; event queued on `email-incoming`.
+* `APPROVED`: Passed security checks; forwarded to `email-approved` for classification.
+* `SECURITY_REVIEW`: Flagged by security scanner (suspicious links, borderline risk); held in review queue.
+* `QUARANTINED`: Blocked due to malicious patterns (dangerous attachments, leaked credentials).
+* `PROCESSING`: Processing worker has picked up the email and is executing the LangGraph workflow.
+* `ROUTED`: High-confidence classification (`confidence >= threshold`); routed automatically.
+* `REVIEW_REQUIRED`: Low-confidence classification (`confidence < threshold`); queued for human triage.
+* `RESOLVED`: Human reviewer approved or corrected the classification.
+* `KAFKA_FAILED`: Kafka publish failed at ingestion; safely stored in DB for recovery retry sweeps.
+* `FAILED`: Workflow failure or message exhausted retries sent to dead-letter topic (`email-failed`).
+* *(Legacy `PENDING` retained for backward compatibility with pre-Kafka records).*
 
 **Why PostgreSQL + SQLAlchemy**: the data is genuinely relational — one
-email has one routing result and, sometimes, one review — a legitimate
-use case for a relational DB, not a default choice made without thought.
+email has one security screening, one routing result, and sometimes one
+review — a legitimate use case for a relational DB, not a default choice
+made without thought.
 
 ---
 
@@ -245,16 +325,17 @@ use case for a relational DB, not a default choice made without thought.
 
 | Method | Path | Description |
 |---|---|---|
-| POST | `/emails` | Submit an email; returns immediately (status `PENDING`), processing runs in the background |
+| POST | `/emails` | Submit an email; returns immediately (status `PENDING_SECURITY`), publishes to Kafka `email-incoming` (falls back to in-process background tasks if Kafka is disabled) |
 | POST | `/emails/fetch` | Manually trigger an IMAP fetch of unseen emails from a real mailbox (see "Running with a real Gmail inbox" below); processes each one synchronously through the same pipeline |
 | GET | `/emails` | List emails (paginated) |
-| GET | `/emails/{id}` | Email detail, including routing result if available |
+| GET | `/emails/{id}` | Email detail, including routing result and security screening if available |
 | GET | `/emails/{id}/classification` | Classification details (409 if not yet classified) |
+| GET | `/emails/{id}/security` | Security screening details (409 if not yet screened) |
 | GET | `/emails/{id}/summary` | Generated summary (409 if not yet processed) |
-| GET | `/reviews/pending` | Emails awaiting human review |
+| GET | `/reviews/pending` | Emails awaiting human review (both low-confidence classifications and security flags) |
 | POST | `/reviews/{id}` | Submit a human decision (`{"final_team": str, "final_team_id": int}`) |
 | GET | `/analytics` | Aggregate stats: totals, auto-routed vs. reviewed, average confidence, by department/team |
-| GET | `/health` | Liveness **and** database connectivity |
+| GET | `/health` | Liveness **and** connectivity status for both PostgreSQL and Kafka |
 
 Full interactive docs at `/docs` once the server is running.
 
@@ -369,8 +450,8 @@ run rather than invented here.
 | Why RAG? | The keyword baseline's own numbers show accuracy collapses on reworded/ambiguous phrasing — the exact failure mode semantic retrieval is meant to address. Full three-way comparison: run `compare_methods.py`. |
 | Why LangGraph? | Multiple stateful steps with confidence-based conditional branching — the textbook case for a graph orchestrator over a plain function chain. |
 | Why FastAPI? | Async-native, Pydantic-integrated, automatic OpenAPI docs. |
-| Why PostgreSQL? | Emails/routing results/reviews are genuinely relational (1:1, 1:0-or-1 relationships). |
-| Why background processing? | LLM calls and (future) SMTP delivery are the slow, occasionally-flaky steps; `POST /emails` shouldn't block on them. |
+| Why PostgreSQL? | Emails, security screenings, routing results, and reviews are genuinely relational (1:1, 1:0-or-1 relationships). |
+| Why Kafka & event workers? | Decouples fast HTTP ingestion from slow/flaky steps (regex security screening, local embeddings RAG, remote LLM inference, and SMTP delivery). Guarantees zero email loss via persistent KRaft topics, manual offset commits, retries with backoff, and dead-letter queueing (`email-failed`). |
 | Why IMAP/SMTP? | Standard protocols for retrieving/sending mail — implemented as a client against existing infrastructure, not a custom mail server. |
 | Why Chroma? | Local, zero-infra, sufficient for a 10-team knowledge base; a managed vector DB would be unjustified complexity here. |
 
@@ -384,9 +465,11 @@ run rather than invented here.
   before trusting these numbers operationally.
 - **No OCR** — scanned/image-only PDF attachments yield no extracted text.
 - **No production-scale claims** — this is a portfolio prototype. It has
-  not been load-tested, and background processing via `BackgroundTasks`
-  does not survive an API process restart mid-task (a real task queue
-  like Redis+RQ would be the fix if that mattered here).
+  not been multi-node load-tested. However, its event-driven Kafka broker
+  architecture with manual commits, retries, and dead-letter queues (`email-failed`)
+  provides durability against worker process restarts. When running in the
+  single-process fallback mode (`KAFKA_ENABLED=false`), in-memory `BackgroundTasks`
+  do not survive API process restarts.
 - **Team notification addresses are hardcoded** (`team-{id}@example.com`
   in `routing_service.py`) rather than looked up from a real directory.
 - **IMAP/SMTP code is not integration-tested** against a real mail
@@ -396,7 +479,14 @@ run rather than invented here.
 
 ## Setup instructions
 
-### 1. Clone and configure
+You can run the system in three ways:
+1. **Full Docker Stack (Recommended)**: Runs Postgres, KRaft Kafka, FastAPI, both Kafka workers, and Streamlit with a single command (see [Docker & Kafka Architecture](#docker--kafka-architecture)).
+2. **Local Development with Kafka & Postgres in Docker**: Runs infrastructure in Docker containers and Python code on your host machine.
+3. **Standalone Local Mode (No Kafka)**: Runs only Postgres in Docker with `KAFKA_ENABLED=false` for minimal resource usage.
+
+### Option A: Local Development with Kafka (Recommended for Dev)
+
+#### 1. Clone and configure
 
 ```bash
 cp .env.example .env
@@ -405,6 +495,12 @@ cp .env.example .env
 Get a **free Groq API key** (no credit card required) at
 https://console.groq.com/keys and set `GROQ_API_KEY` in `.env`. This
 powers classification and summarization.
+
+Configure Kafka settings in `.env` for host connectivity:
+```env
+KAFKA_BOOTSTRAP_SERVERS=localhost:9092
+KAFKA_ENABLED=true
+```
 
 Embeddings run **locally** via `sentence-transformers` — no API key, no
 account, no cost. The first run downloads the model (~90MB) and caches
@@ -419,31 +515,24 @@ it locally.
 > you do have HF billing set up and want to use them instead — see
 > `app/core/dependencies.py`.
 
-### 2. Start Postgres
+#### 2. Start Postgres and Kafka
 
 ```bash
-docker compose up -d db
+docker compose up -d db kafka
 ```
 
-### 3. Install dependencies
+#### 3. Install dependencies
 
 Requires **Python 3.13** (3.12+ also supported — every dependency
 publishes compatible wheels for either).
 
 > **Windows note**: `psycopg2-binary` only ships prebuilt Python 3.13
 > wheels from version `2.9.10` onward — `requirements.txt` is pinned to
-> `2.9.12` specifically for this reason. Using an older pin on Windows
-> makes pip fall back to compiling from source, which fails with a
-> `_PyInterpreterState_Get` link error (a real Python 3.13 C-API
-> incompatibility in that older build, not a local setup problem).
+> `2.9.12` specifically for this reason.
 
 > **Optional — smaller download**: `pip install -r requirements-dev.txt`
 > pulls the standard `torch` wheel, which bundles full CUDA support
-> (~2GB) even though this project only runs a small embedding model on
-> CPU. This works fine as-is; if you'd rather save the download size,
-> install the CPU-only build from PyTorch's own index *before* running
-> the command below — pip will then see torch is already satisfied and
-> won't fetch the CUDA version:
+> (~2GB). If you'd rather save bandwidth on CPU-only machines:
 > ```bash
 > pip install torch==2.9.1 --index-url https://download.pytorch.org/whl/cpu
 > ```
@@ -454,34 +543,58 @@ source .venv/bin/activate        # Windows: .venv\Scripts\activate
 pip install -r requirements-dev.txt
 ```
 
-### 4. Build the RAG index
+#### 4. Build the RAG index
 
 ```bash
 python -m scripts.build_index
 ```
 
-### 5. Run the API
+#### 5. Start Application Processes (in separate terminals)
 
-```bash
-uvicorn app.main:app --reload
-```
+* **Terminal 1 (FastAPI API):**
+  ```bash
+  uvicorn app.main:app --reload
+  ```
+  Visit http://localhost:8000/docs.
 
-Visit http://localhost:8000/docs.
+* **Terminal 2 (Security Screening Worker):**
+  ```bash
+  python -m app.kafka.security_consumer
+  ```
 
-### 6. Run the Streamlit UI (separate terminal)
+* **Terminal 3 (Processing Worker):**
+  ```bash
+  python -m app.kafka.processing_consumer
+  ```
 
-```bash
-streamlit run streamlit_app/app.py
-```
+* **Terminal 4 (Streamlit UI):**
+  ```bash
+  streamlit run streamlit_app/app.py
+  ```
+  Visit http://localhost:8501.
 
-Visit http://localhost:8501.
+---
 
-### 7. Try it
+### Option B: Standalone Local Mode (Without Kafka)
 
-- **Mode 1 (API/demo)**: use the Streamlit "Submit Email" tab, or
-  `curl -X POST localhost:8000/emails -d '{"sender":"a@b.com","subject":"help","body":"I cannot log in"}' -H "Content-Type: application/json"`.
-- **Mode 2 (sample data)**: click "Load 3 sample emails" in Streamlit, which reads `data/sample_emails.json`.
-- **Mode 3 (real IMAP)**: set `IMAP_HOST`/`IMAP_USER`/`IMAP_PASSWORD` in `.env`, then call `app.integrations.imap_client.fetch_unseen_emails()`.
+If you do not want to run Kafka locally:
+1. Start Postgres only: `docker compose up -d db`
+2. In `.env`, set: `KAFKA_ENABLED=false`
+3. Terminal 1: `uvicorn app.main:app --reload`
+4. Terminal 2: `streamlit run streamlit_app/app.py`
+
+In this mode, security screening runs synchronously inline, and classification executes via FastAPI `BackgroundTasks`.
+
+---
+
+### Trying the Application
+
+- **Mode 1 (API/demo)**: use the Streamlit "Submit Email" tab, or:
+  ```bash
+  curl -X POST localhost:8000/emails -d '{"sender":"user@example.com","subject":"VPN help","body":"I cannot log into the VPN"}' -H "Content-Type: application/json"
+  ```
+- **Mode 2 (sample data)**: click "Load sample emails" in Streamlit, which reads `data/sample_emails.json`.
+- **Mode 3 (real IMAP)**: set `IMAP_HOST`/`IMAP_USER`/`IMAP_PASSWORD` in `.env`, then trigger `POST /emails/fetch` or use the Streamlit interface.
 
 ---
 
@@ -620,10 +733,18 @@ below.)
 
 ## Environment variables
 
-See `.env.example` for the full list with inline comments. Only
-`DATABASE_URL` and `GROQ_API_KEY` are needed for a typical local run
-(embeddings run locally, no key needed); IMAP/SMTP variables are optional
-and only used for real mailbox integration.
+See `.env.example` for the full list with inline comments.
+
+| Variable | Default / Example | Purpose |
+|---|---|---|
+| `DATABASE_URL` | `postgresql://postgres:postgres@localhost:5432/email_router` | PostgreSQL connection string |
+| `GROQ_API_KEY` | *(Required for LLM)* | API key from https://console.groq.com/keys (powers classification and summary) |
+| `KAFKA_BOOTSTRAP_SERVERS` | `kafka:29092` (Docker) or `localhost:9092` (local host dev) | Apache Kafka broker address |
+| `KAFKA_ENABLED` | `true` | When `false`, disables Kafka and runs inline security screening + background tasks |
+| `CONFIDENCE_THRESHOLD` | `0.80` | Threshold above which emails route automatically |
+| `IMAP_HOST` / `IMAP_USER` / `IMAP_PASSWORD` | *(Optional)* | Inbound credentials for real mailbox fetching |
+| `SMTP_HOST` / `SMTP_USER` / `SMTP_PASSWORD` | *(Optional)* | Outbound credentials for team notifications |
+| `API_BASE_URL` | `http://localhost:8000` | Base URL used by the Streamlit frontend |
 
 ---
 
@@ -703,8 +824,9 @@ rules rule out.
 ## Future improvements
 
 - Larger, more rigorously validated evaluation dataset (target 200-300 examples, ideally including some real anonymized data)
+- Multi-partition Kafka topic scaling with dynamic consumer group rebalancing
+- OpenTelemetry distributed tracing across the Kafka event pipeline (`api` -> `security-worker` -> `processing-worker`)
 - OCR for scanned PDF attachments
 - Real team-directory lookup instead of a hardcoded notification address template
-- Redis + RQ if background processing ever needs to survive restarts or scale independently
 - Calibration study for the confidence score (e.g. temperature scaling against a held-out labeled set) rather than treating it as a raw heuristic
 - Swap-in OpenAI/Ollama LLM client (the `LLMClient` abstraction already supports this — just a new subclass)

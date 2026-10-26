@@ -34,7 +34,7 @@ class Settings(BaseSettings):
     # Embeddings run locally by default (sentence-transformers, no API key
     # needed). huggingfacehub_api_token is only used if you explicitly
     # switch to HuggingFaceInferenceEmbeddings/HuggingFaceLLMClient.
-    huggingfacehub_api_token: str =""
+    huggingfacehub_api_token: str ="[ENCRYPTION_KEY]"
     embedding_model_name: str = "sentence-transformers/all-MiniLM-L6-v2"
     chroma_persist_dir: str = "chroma_db"
     retrieval_top_k: int = 3
@@ -44,11 +44,11 @@ class Settings(BaseSettings):
     imap_host: str = "imap.gmail.com"
     imap_port: int = 993
     imap_user: str = "[EMAIL_ADDRESS]"
-    imap_password: str = ""
+    imap_password: str = "[PASSWORD]"
     smtp_host: str = "smtp.gmail.com"
     smtp_port: int = 587
     smtp_user: str = "[EMAIL_ADDRESS]"
-    smtp_password: str = ""
+    smtp_password: str = "[PASSWORD]"
     max_attachment_size_mb: int = 10
 
     # --- Kafka ---
